@@ -86,7 +86,7 @@ def main(model0_path, model1_path, device="cuda"):
     plt.xlabel("alpha")
     plt.ylabel("acc")
     plt.legend(["plain fusion"])
-    plt.savefig(path + "/plots/plain.png")
+    plt.savefig(path + "/plots/same/plain.png")
 
 
     for i in tqdm.tqdm(range(num_experiments)):
@@ -101,7 +101,7 @@ def main(model0_path, model1_path, device="cuda"):
     plt.xlabel("alpha")
     plt.ylabel("acc")
     plt.legend(["plain fusion", "permuted fusion"])
-    plt.savefig(path + "/plots/permute.png")
+    plt.savefig(path + "/plots/same/permute.png")
 
 
     for i in tqdm.tqdm(range(10)):
@@ -116,7 +116,7 @@ def main(model0_path, model1_path, device="cuda"):
     plt.xlabel("alpha")
     plt.ylabel("acc")
     plt.legend(["plain fusion", "permuted fusion", "REPAIR fusion"])
-    plt.savefig(path + "/plots/permute.png")
+    plt.savefig(path + "/plots/same/permute.png")
    
 
 if __name__ == "__main__":
