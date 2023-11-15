@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DEVICE="mps"
+DEVICE="cuda"
 M0="fash_mnist_mlp_e50_l5_h128_v2.pt"
 M1="mnist_mlp_e50_l5_h128_v1.pt"
 
