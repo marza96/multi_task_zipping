@@ -1,24 +1,25 @@
 import os
-from tqdm import tqdm
 import torch
+import argparse
 import torchvision
 
 import numpy as np
 import torchvision.transforms as transforms
 
+from tqdm import tqdm
 from torch.nn import CrossEntropyLoss
 from torch.optim import SGD, lr_scheduler
 
 from net_models.mlp import MLP
-from REPAIR.eval import evaluate_acc
+from eval_tools import evaluate_acc
 
 
 def save_model(model, i):
     sd = model.state_dict()
-    torch.save(sd, 'mlps2/%s.pt' % i)
+    torch.save(sd, i)
 
 def load_model(model, i):
-    sd = torch.load('mlps2/%s.pt' % i)
+    sd = torch.load(i)
     model.load_state_dict(sd)
 
 
@@ -34,10 +35,7 @@ def train(save_key, layers=5, h=512, train_loader=None, device=None):
 
     optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
     
-    EPOCHS = 20
-    ne_iters = len(train_loader)
-    # lr_schedule = np.interp(np.arange(1+EPOCHS*ne_iters), [0, 5 * ne_iters, EPOCHS * ne_iters], [0, 1, 0])
-    # scheduler = lr_scheduler.LambdaLR(optimizer, lr_schedule.__getitem__)
+    EPOCHS = 1
 
     loss_fn = CrossEntropyLoss()
 
@@ -56,7 +54,6 @@ def train(save_key, layers=5, h=512, train_loader=None, device=None):
             loss_acum += loss.mean()
             total += 1
             optimizer.step()
-            # scheduler.step()
 
         print("LOSS: ", loss_acum / total)
     
@@ -64,21 +61,19 @@ def train(save_key, layers=5, h=512, train_loader=None, device=None):
     print("ACC:", evaluate_acc(model, loader=train_loader, device=device))
 
 
-def main():
-    os.makedirs('./mlps2', exist_ok=True)
-    device = torch.device("cuda")
-    MNIST_MEAN = [0.1307]
-    MNIST_STD = [0.3081]
+def main(dataset0, dataset1, device="cuda"):
+    device = torch.device(device)
+    path   = os.path.dirname(__file__)
+    os.makedirs(path + '/pt_models', exist_ok=True)
 
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
-            # transforms.Normalize(np.array(MNIST_MEAN), np.array(MNIST_STD))
         ]
     )
 
     FashMnistTrainSet = torchvision.datasets.FashionMNIST(
-        root='./data', 
+        root=path + '/data', 
         train=True,
         download=True, 
         transform=transform
@@ -91,7 +86,7 @@ def main():
     )
 
     mnistTrainSet = torchvision.datasets.MNIST(
-        root='./data', 
+        root=path + '/data', 
         train=True,
         download=True, 
         transform=transform
@@ -103,14 +98,37 @@ def main():
         num_workers=8
     )
 
-    #FASHION MNIST
-    #1: 0.92535
-    #2: 0.92591
     h = 128
     layers = 5
-    train('mnist_mlp_e50_l%d_h%d_v1_cuda' % (layers, h), layers=layers, h=h, train_loader=mnistTrainLoader, device=device)  
-    train('fash_mnist_mlp_e50_l%d_h%d_v2_cuda' % (layers, h), layers=layers, h=h, train_loader=FashMnistTrainLoader, device=device)
 
+    loader0 = None
+    loader1 = None
+    prefix0 = None
+    prefix1 = None
+
+    if dataset0 == "MNIST":
+        loader0 = mnistTrainLoader
+        prefix0 = "mnist_"
+    elif dataset0 == "FashionMNIST":
+        loader0 = FashMnistTrainLoader
+        prefix0 = "fash_mnist_"
+
+    if dataset1 == "MNIST":
+        loader1 = mnistTrainLoader
+        prefix1 = "mnist_"
+    elif dataset1 == "FashionMNIST":
+        loader1 = FashMnistTrainLoader
+        prefix1 = "fash_mnist_"
+
+    train(path + '/pt_models/%smlp_e50_l%d_h%d_v1_%s.pt' % (prefix0, layers, h, device), layers=layers, h=h, train_loader=loader0, device=device)  
+    train(path + '/pt_models/%smlp_e50_l%d_h%d_v2_%s.pt' % (prefix1, layers, h, device), layers=layers, h=h, train_loader=loader1, device=device)  
+    
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--device', default="cuda")
+    parser.add_argument('-d0', '--dataset0', default="cuda")
+    parser.add_argument('-d1', '--dataset1', default="cuda")
+    args = parser.parse_args()
+
+    main(args.dataset0, args.dataset1, device=args.device)

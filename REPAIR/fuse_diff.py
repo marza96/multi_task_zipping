@@ -4,6 +4,7 @@ from neural_align_diff import NeuralAlignDiff
 
 import argparse
 
+import os
 import tqdm
 import copy
 import torch
@@ -29,6 +30,7 @@ def main(model0_path, model1_path, device="cuda"):
     h          = 128
     layers     = 5
     device     = torch.device(device)
+    path       = os.path.dirname(__file__)
 
     transform = transforms.Compose(
         [
@@ -37,7 +39,7 @@ def main(model0_path, model1_path, device="cuda"):
     )
 
     FashionMNISTTrainSet = torchvision.datasets.FashionMNIST(
-        root='./data', 
+        root=path + '/data', 
         train=True,
         download=True, 
         transform=transform
@@ -49,7 +51,7 @@ def main(model0_path, model1_path, device="cuda"):
         num_workers=8
     )
     MNISTTrainSet = torchvision.datasets.MNIST(
-        root='./data', 
+        root=path + '/data', 
         train=True,
         download=True, 
         transform=transform
@@ -70,11 +72,9 @@ def main(model0_path, model1_path, device="cuda"):
 
     model0 = MLP(h, layers).to(device)
     model1 = MLP(h, layers).to(device)
-    # load_model(model0, "mlps2/fash_mnist_mlp_e50_l5_h128_v2_cuda.pt")
-    # load_model(model1, "mlps2/mnist_mlp_e50_l5_h128_v1_cuda.pt")
 
-    load_model(model0, model0_path)
-    load_model(model1, model1_path)
+    load_model(model0, path + "/pt_models/" + model0_path)
+    load_model(model1, path + "/pt_models/" + model1_path)
 
     plain_acc               = list()
     permute_acc             = list()
@@ -95,7 +95,7 @@ def main(model0_path, model1_path, device="cuda"):
     plt.xlabel("alpha")
     plt.ylabel("acc")
     plt.legend(["plain fusion"])
-    plt.savefig("./plots/plain.png")
+    plt.savefig(path + "/plots/diff/plain.png")
 
 
     for i in tqdm.tqdm(range(num_experiments)):
@@ -111,7 +111,7 @@ def main(model0_path, model1_path, device="cuda"):
     plt.xlabel("alpha")
     plt.ylabel("acc")
     plt.legend(["plain fusion", "permuted fusion"])
-    plt.savefig("./plots/permute.png")
+    plt.savefig(path + "/plots/diff/permute.png")
 
 
     for i in tqdm.tqdm(range(10)):
@@ -127,7 +127,7 @@ def main(model0_path, model1_path, device="cuda"):
     plt.xlabel("alpha")
     plt.ylabel("acc")
     plt.legend(["plain fusion", "permuted fusion", "REPAIR fusion"])
-    plt.savefig("./plots/repair.png")
+    plt.savefig(path + "/plots/diff/repair.png")
    
 
 if __name__ == "__main__":
