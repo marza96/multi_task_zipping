@@ -35,7 +35,7 @@ def train(save_key, layers=5, h=512, train_loader=None, device=None):
 
     optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
     
-    EPOCHS = 1
+    EPOCHS = 20
 
     loss_fn = CrossEntropyLoss()
 
