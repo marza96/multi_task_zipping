@@ -89,7 +89,9 @@ def main(model0_path, model1_path, device="cuda"):
         modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, layers, device=device, new_stats=False, permute=False).to(device)
 
         plain_acc.append(eval_tools.evaluate_acc(modela, loader=ConcatTrainLoader, device=device))
-    
+        if i == 5:
+            print("plain acc: ", plain_acc[-1])
+
     plt.figure()
     plt.plot(np.linspace(0, 1.0, num_experiments), plain_acc)
     plt.xlabel("alpha")
@@ -105,7 +107,10 @@ def main(model0_path, model1_path, device="cuda"):
         modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, layers, device=device, new_stats=False, permute=True).to(device)
 
         permute_acc.append(eval_tools.evaluate_acc(modela, loader=ConcatTrainLoader, device=device))
-    
+
+        if i == 5:
+            print("permute acc: ", permute_acc[-1]) 
+
     # plt.plot(np.linspace(0, 1.0, num_experiments), plain_acc)
     plt.plot(np.linspace(0, 1.0, num_experiments), permute_acc)
     plt.xlabel("alpha")
@@ -121,7 +126,10 @@ def main(model0_path, model1_path, device="cuda"):
         modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, layers, device=device, new_stats=True, permute=True).to(device)
 
         permute_and_rescale_acc.append(eval_tools.evaluate_acc(modela, loader=ConcatTrainLoader, device=device))
-    
+
+        if i == 5:
+            print("repair acc: ", permute_and_rescale_acc[-1]) 
+
     # plt.plot(np.linspace(0, 1.0, num_experiments), plain_acc)
     plt.plot(np.linspace(0, 1.0, num_experiments), permute_and_rescale_acc)
     plt.xlabel("alpha")
