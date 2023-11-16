@@ -20,7 +20,7 @@ class MLP(nn.Module):
             ])
             
         self.layers = nn.Sequential(*mid_layers)
-        self.fc2 = nn.Linear(h, 10)
+        self.fc2 = nn.Linear(h, 20)
 
     def forward(self, x):
         if x.size(1) == 3:

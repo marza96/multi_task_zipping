@@ -15,8 +15,26 @@ def evaluate_acc(model, loader=None, device=None, stop=10e6):
     with torch.no_grad():
         for inputs, labels in loader:
             outputs = model(inputs.to(device))
+
+            outputs0 = torch.zeros(labels.shape[0], 20).to(device)
+            outputs1 = torch.zeros(labels.shape[0], 20).to(device)
+
+            outputs0[:, 10:] = outputs[:, 10:].clone()
+            outputs1[:, :10] = outputs[:, :10].clone()
+
             pred = outputs.argmax(dim=1)
-            correct += (labels.to(device) == pred).sum().item()
+
+            pred0 = outputs0.argmax(dim=1)
+            pred1 = outputs1.argmax(dim=1)
+
+            head0_filter = (labels >= 10).to(device)
+            head1_filter = (labels < 10).to(device)
+
+            labels = labels.to(device)
+            correct += (labels[head0_filter].to(device) == pred0[head0_filter]).sum().item()
+            correct += (labels[head1_filter].to(device) == pred1[head1_filter]).sum().item()
+
+            # correct += (labels.to(device) == pred).sum().item()
             total += len(labels)
 
             if total > stop:

@@ -204,6 +204,13 @@ class NeuralAlignDiff:
         sd_alpha = {k: (1 - alpha) * sd0[k] + alpha * sd1[k]
                     for k in sd0.keys()}
         
+        for k in sd0.keys():
+            if k == "fc2.weight":
+                sd_alpha[k] = sd0[k] + sd1[k]
+                continue
+
+            sd_alpha[k] = (1 - alpha) * sd0[k] + alpha * sd1[k]
+        
         model.load_state_dict(sd_alpha)
         
 

@@ -6,6 +6,7 @@ import argparse
 
 import os
 import tqdm
+import util
 import copy
 import torch
 import torchvision
@@ -88,8 +89,8 @@ def estimate_stats(model, loader, device=None, rescale=False):
 
 
 def main(model0_path, model1_path, device="cuda"):
-    h          = 128
-    layers     = 5
+    h          = 512
+    layers     = 3
     device     = torch.device(device)
     path       = os.path.dirname(__file__)
 
@@ -104,7 +105,8 @@ def main(model0_path, model1_path, device="cuda"):
         root=path + '/data', 
         train=True,
         download=True, 
-        transform=transform
+        transform=transform,
+        target_transform=util.OffsetLabel(10)
     )
     FashionMNISTTrainLoader = torch.utils.data.DataLoader(
         FashionMNISTTrainSet, 
@@ -132,11 +134,14 @@ def main(model0_path, model1_path, device="cuda"):
         num_workers=8
     )
 
+
     model0 = MLP(h, layers).to(device)
     model1 = MLP(h, layers).to(device)
 
     load_model(model0, path + "/pt_models/" + model0_path)
     load_model(model1, path + "/pt_models/" + model1_path)
+
+    print("ACC", eval_tools.evaluate_acc(model1, loader=ConcatTrainLoader, device=device))
 
     plain_acc               = list()
     permute_acc             = list()
@@ -199,7 +204,6 @@ def main(model0_path, model1_path, device="cuda"):
     plt.ylabel("acc")
     plt.legend(["plain fusion", "permuted fusion"])
     plt.savefig(path + "/plots/diff/permute.png")
-
 
     for i in tqdm.tqdm(range(10)):
         model0_ = copy.deepcopy(model0)

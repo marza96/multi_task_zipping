@@ -1,4 +1,5 @@
 import os
+import util
 import torch
 import argparse
 import torchvision
@@ -29,13 +30,13 @@ def init_weights(m):
         m.bias.data.fill_(0.01)
 
 
-def train(save_key, layers=5, h=512, train_loader=None, device=None):
+def train(save_key, layers=5, h=512, train_loader=None, device=None, idx=None):
     model = MLP(h=h, layers=layers).to(device)
     model.apply(init_weights)
 
     optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
     
-    EPOCHS = 20
+    EPOCHS = 100
 
     loss_fn = CrossEntropyLoss()
 
@@ -57,6 +58,12 @@ def train(save_key, layers=5, h=512, train_loader=None, device=None):
 
         print("LOSS: ", loss_acum / total)
     
+    with torch.no_grad():
+        if idx == 1:
+            model.fc2.weight[10:, :] = 0.0
+        if idx == 0:
+            model.fc2.weight[:10, :] = 0.0
+
     save_model(model, save_key)
     print("ACC:", evaluate_acc(model, loader=train_loader, device=device))
 
@@ -76,7 +83,8 @@ def main(dataset0, dataset1, device="cuda"):
         root=path + '/data', 
         train=True,
         download=True, 
-        transform=transform
+        transform=transform,
+        target_transform=util.OffsetLabel(10)
     )
     FashMnistTrainLoader = torch.utils.data.DataLoader(
         FashMnistTrainSet, 
@@ -98,8 +106,8 @@ def main(dataset0, dataset1, device="cuda"):
         num_workers=8
     )
 
-    h = 128
-    layers = 5
+    h = 512
+    layers = 3
 
     loader0 = None
     loader1 = None
@@ -120,8 +128,8 @@ def main(dataset0, dataset1, device="cuda"):
         loader1 = FashMnistTrainLoader
         prefix1 = "fash_mnist_"
 
-    train(path + '/pt_models/%smlp_e50_l%d_h%d_v1_%s.pt' % (prefix0, layers, h, device), layers=layers, h=h, train_loader=loader0, device=device)  
-    train(path + '/pt_models/%smlp_e50_l%d_h%d_v2_%s.pt' % (prefix1, layers, h, device), layers=layers, h=h, train_loader=loader1, device=device)  
+    train(path + '/pt_models/%smlp_e50_l%d_h%d_v1_%s.pt' % (prefix0, layers, h, device), layers=layers, h=h, train_loader=loader0, device=device, idx=0)  
+    train(path + '/pt_models/%smlp_e50_l%d_h%d_v2_%s.pt' % (prefix1, layers, h, device), layers=layers, h=h, train_loader=loader1, device=device, idx=1)  
     
 
 if __name__ == "__main__":
