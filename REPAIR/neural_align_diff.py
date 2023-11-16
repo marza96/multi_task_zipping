@@ -11,6 +11,25 @@ import torch.nn as nn
 
 import matplotlib.pyplot as plt
 
+class STEFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        return (input > 0).float()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return F.hardtanh(grad_output)
+    
+
+class StraightThroughEstimator(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+            x = STEFunction.apply(x)
+            return x
+    
+
 class NeuralAlignDiff:
     def __init__(self, loader0, loader1, loaderc) -> None:
         self.permutations = list()
@@ -21,6 +40,8 @@ class NeuralAlignDiff:
         self.loader0 = loader0
         self.loader1 = loader1
         self.loaderc = loaderc
+
+        self.dbg0 = None
 
     def run_corr_matrix(self, net0, net1, epochs=1, loader=None, device=None):
         n = epochs * len(loader)
@@ -64,7 +85,6 @@ class NeuralAlignDiff:
 
         return corr
 
-
     def optimize_corr(self, corr_mtx):
         corr_mtx_a = corr_mtx.cpu().numpy()
         row_ind, col_ind = scipy.optimize.linear_sum_assignment(corr_mtx_a, maximize=True)
@@ -74,13 +94,53 @@ class NeuralAlignDiff:
         perm_map = torch.tensor(col_ind).long()
 
         return perm_map
+    
+    def perm_to_permmat(self, permutation):
+        perm_mat = torch.zeros((5, 5))
+        perm_mat[torch.arange(5), permutation] = 1
 
+        return perm_mat
+
+    def permmat_to_perm(permmat):
+        perm = torch.Tensor(permmat.shape[0])
+        perm = torch.where(permmat == 1)[1]
+
+        return perm
 
     def get_layer_perm(self, net0, net1, epochs=1, loader=None, device=None):
         corr_mtx = self.run_corr_matrix(net0, net1, epochs=1, loader=loader, device=device)
 
         return self.optimize_corr(corr_mtx), corr_mtx
+    
+    def perm_coord_descent(self, net0, net1, epochs=1, loader=None, device=None):
+        perm_mats = [None for _ in range(net0.num_layers + 2)]
+        perm_mats[0] = torch.eye(net0.fc1.weight.shape[1], net0.fc1.weight.shape[1])
 
+        for i in range(net0.num_layers):
+            perm_mats[i + 1] = torch.eye(net0.layers[2 * i].weight.shape[1], net0.layers[2 * i].weight.shape[1])
+
+        perm_mats[-1] = torch.eye(net0.fc2.weight.shape[1], net0.fc2.weight.shape[1])
+        
+        w_0 = net0.fc1.weight.clone()
+        w_1 = net0.layers[0].weight.clone()
+        obj = w_0 @ perm_mats[0] @ w_0.T + w_1.T @ perm_mats[1] @ w_1
+        
+        w_i = w_1
+        for i in range(net0.num_layers):
+            if i < net0.num_layers - 1:
+                w_ii = net0.layers[2 * (i + 1)].weight.clone()
+            else:
+                w_ii = net0.fc2.weight.clone()
+            
+            obj = w_i @ perm_mats[i + 1] @ w_i.T 
+
+            if i < net0.num_layers - 1:
+                obj += w_ii.T @ perm_mats[i + 2] @ w_ii
+
+            w_i = w_ii  
+
+    def geet_layer_perm_ste(self, net0, net1, epochs=1, loader=None, device=None):
+        pass
 
     def align_networks(self, model0, model1, layers, loader=None, device=None):
         cl0 = copy.deepcopy(model0.to("cpu")).to(device)
@@ -123,7 +183,6 @@ class NeuralAlignDiff:
 
         return model0, model1
 
-
     def wrap_layers(self, model, rescale):
         wrapped_model = model
 
@@ -158,6 +217,7 @@ class NeuralAlignDiff:
                 loader=self.loaderc, 
                 device=device
             )
+            self.dbg0 = model0
 
         self.mix_weights(modela, model0, model1, alpha)
 
@@ -196,8 +256,6 @@ class NeuralAlignDiff:
             
             stats0_ = model0_tracked.fc1.get_stats()
             stats1_ = model1_tracked.fc1.get_stats()
-
-            print(stats0_[0].shape)
 
             self.statistics.append((stats0_, stats1_))
 

@@ -1,4 +1,4 @@
-from net_models.mlp import MLP
+from net_models.mlp import MLP, LayerWrapper
 import eval_tools
 from neural_align_diff import NeuralAlignDiff
 
@@ -11,6 +11,7 @@ import torch
 import torchvision
 
 import numpy as np
+import torch.nn as nn
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 
@@ -25,6 +26,66 @@ def load_model(model, i):
     sd = torch.load(i)
     model.load_state_dict(sd)
 
+def unwrap_layers(model, rescale):
+    unwrapped_model = model
+
+    unwrapped_model.fc1 = unwrapped_model.fc1.layer
+    
+    for i in range(len(unwrapped_model.layers)):
+        layer = unwrapped_model.layers[i]
+
+        if isinstance(layer, nn.Linear):
+            unwrapped_model.layers[i] = unwrapped_model.layers[i].layer
+
+    return unwrapped_model
+
+
+def wrap_layers(model, rescale):
+    wrapped_model = model
+
+    wrapped_model.fc1 = LayerWrapper(wrapped_model.fc1, rescale=rescale)
+
+    for i in range(len(wrapped_model.layers)):
+        layer = wrapped_model.layers[i]
+
+        if isinstance(layer, nn.Linear):
+            wrapped_model.layers[i] = LayerWrapper(wrapped_model.layers[i], rescale=rescale)
+
+    return wrapped_model
+
+
+def estimate_stats(model, loader, device=None, rescale=False):
+    statistics = list()
+    model = model.to(device)
+    
+    print("DBG", model.fc1.rescale)
+    
+    model.train()
+    for m in model.modules():
+        if isinstance(m, nn.modules.batchnorm._BatchNorm):
+            m.momentum = None
+            m.reset_running_stats()
+
+    with tqdm.tqdm(torch.no_grad()):
+        for inputs, labels in loader:
+            o2 = model(inputs.to(device))
+
+    model.eval()
+
+    stats_ = model.fc1.get_stats()
+    statistics.append(stats_)
+
+
+    for i in tqdm.tqdm(range(len(model.layers))):
+        if not isinstance(model.layers[i], LayerWrapper):
+            continue
+
+        stats_ = model.layers[i].get_stats()
+
+        statistics.append(stats_)
+
+    return statistics
+
 
 def main(model0_path, model1_path, device="cuda"):
     h          = 128
@@ -38,6 +99,7 @@ def main(model0_path, model1_path, device="cuda"):
         ]
     )
 
+    # Skype handle: aeniha
     FashionMNISTTrainSet = torchvision.datasets.FashionMNIST(
         root=path + '/data', 
         train=True,
@@ -82,6 +144,27 @@ def main(model0_path, model1_path, device="cuda"):
 
     num_experiments = 10
     neural_align_ = NeuralAlignDiff(FashionMNISTTrainLoader, MNISTTrainLoader, ConcatTrainLoader)
+
+    # model0_ = copy.deepcopy(model0)
+    # model1_ = copy.deepcopy(model1)
+    # modela_ = neural_align_.fuse_networks(model0_, model1_, 0.5, layers, device=device, new_stats=False, permute=True).to(device)
+
+    # model0_ = wrap_layers(model0_, rescale=False)
+    # modela_ = wrap_layers(modela_, rescale=False)
+    # stats0 = estimate_stats(model0_, FashionMNISTTrainLoader, device=device)
+    # statsa = estimate_stats(modela_, FashionMNISTTrainLoader, device=device)
+
+    # print("DBG per", torch.mean(statsa[3][1] / stats0[3][1]))
+
+    # model0_ = copy.deepcopy(model0)
+    # model1_ = copy.deepcopy(model1)
+    # modela_ = neural_align_.fuse_networks(model0_, model1_, 0.5, layers, device=device, new_stats=True, permute=True).to(device)
+
+    # stats0 = estimate_stats(model0_, FashionMNISTTrainLoader, device=device)
+    # statsa = estimate_stats(modela_, FashionMNISTTrainLoader, device=device)
+
+    # print("DBG rep", torch.mean(statsa[3][1] / stats0[3][1]))
+
     for i in tqdm.tqdm(range(num_experiments)):
         model0_ = copy.deepcopy(model0)
         model1_ = copy.deepcopy(model1)
@@ -98,7 +181,6 @@ def main(model0_path, model1_path, device="cuda"):
     plt.ylabel("acc")
     plt.legend(["plain fusion"])
     plt.savefig(path + "/plots/diff/plain.png")
-
 
     for i in tqdm.tqdm(range(num_experiments)):
         model0_ = copy.deepcopy(model0)
