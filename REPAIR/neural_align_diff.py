@@ -191,9 +191,6 @@ class NeuralAlignDiff:
         model1.fc2.bias.data   = bias[perm_map_].clone()
         print("F", model1.fc2.weight.shape)
         
-        perm = self.perm_to_permmat(perm_map_).T
-        model1.perm = self.permmat_to_perm(perm)
-        
         return model0, model1
 
 
