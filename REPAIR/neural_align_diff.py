@@ -181,16 +181,6 @@ class NeuralAlignDiff:
         model1.fc2.weight.data = weight[:, last_perm_map]
         self.perms_calc = True
 
-
-        perm_map_, corr_mtx = self.get_layer_perm(model0.to(device), model1.to(device), epochs=1, loader=loader, device=device)
-        weight   = model1.fc2.weight
-        bias     = model1.fc2.bias  
-
-        print("F0", model1.fc2.weight.shape)
-        model1.fc2.weight.data = weight[perm_map_].clone()
-        model1.fc2.bias.data   = bias[perm_map_].clone()
-        print("F", model1.fc2.weight.shape)
-        
         return model0, model1
 
 
