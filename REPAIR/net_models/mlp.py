@@ -4,10 +4,11 @@ import torch.nn.functional as F
 
 
 class MLP(nn.Module):
-    def __init__(self, h=128, layers=3):
+    def __init__(self, h=128, layers=3, perm=None):
         super().__init__()
 
         self.h          = h
+        self.perm       = perm
         self.num_layers = layers
         self.subnet     = Subnet
         self.fc1        = nn.Linear(28*28, h, bias=True)
@@ -31,6 +32,9 @@ class MLP(nn.Module):
         x = self.layers(x)
         x = self.fc2(x)
 
+        if self.perm is not None:
+            x = x[:, self.perm]
+            
         return x
     
 
