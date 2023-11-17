@@ -59,8 +59,6 @@ def estimate_stats(model, loader, device=None, rescale=False):
     statistics = list()
     model = model.to(device)
     
-    print("DBG", model.fc1.rescale)
-    
     model.train()
     for m in model.modules():
         if isinstance(m, nn.modules.batchnorm._BatchNorm):
@@ -103,7 +101,7 @@ def main(model0_path, model1_path, device="cuda"):
     # Skype handle: aeniha
     FashionMNISTTrainSet = torchvision.datasets.FashionMNIST(
         root=path + '/data', 
-        train=True,
+        train=False,
         download=True, 
         transform=transform,
         target_transform=util.OffsetLabel(10)
@@ -116,7 +114,7 @@ def main(model0_path, model1_path, device="cuda"):
     )
     MNISTTrainSet = torchvision.datasets.MNIST(
         root=path + '/data', 
-        train=True,
+        train=False,
         download=True, 
         transform=transform
     )
