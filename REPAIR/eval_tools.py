@@ -6,12 +6,32 @@ import torch.functional as F
 from torch.cuda.amp import autocast
 
 
+def evaluate_acc_single_head(model, loader=None, device=None, stop=10e6):
+    assert loader is not None
+
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for inputs, labels in loader:
+            outputs = model(inputs.to(device))
+            pred = outputs.argmax(dim=1)
+            correct += (labels.to(device) == pred).sum().item()
+            total += len(labels)
+
+            if total > stop:
+                break
+
+    return correct / total
+
+
 def evaluate_acc(model, loader=None, device=None, stop=10e6):
     assert loader is not None
 
     model.eval()
     correct = 0
     total = 0
+    unique_labels = list()
     with torch.no_grad():
         for inputs, labels in loader:
             outputs = model(inputs.to(device))
@@ -21,8 +41,6 @@ def evaluate_acc(model, loader=None, device=None, stop=10e6):
 
             outputs0[:, 10:] = outputs[:, 10:].clone()
             outputs1[:, :10] = outputs[:, :10].clone()
-
-            pred = outputs.argmax(dim=1)
 
             pred0 = outputs0.argmax(dim=1)
             pred1 = outputs1.argmax(dim=1)
@@ -34,8 +52,14 @@ def evaluate_acc(model, loader=None, device=None, stop=10e6):
             correct += (labels[head0_filter].to(device) == pred0[head0_filter]).sum().item()
             correct += (labels[head1_filter].to(device) == pred1[head1_filter]).sum().item()
 
-            # correct += (labels.to(device) == pred).sum().item()
             total += len(labels)
+
+            unique = torch.unique(labels).cpu().numpy().tolist()
+            unique_labels += unique
+
+            unique_labels = np.unique(unique_labels).tolist()
+            print(unique_labels)
+            print(np.all(np.isin(np.arange(10), unique_labels)))
 
             if total > stop:
                 break

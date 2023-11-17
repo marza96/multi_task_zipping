@@ -2,6 +2,20 @@ from typing import Any
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+class DatasetSplitter:
+    def __init__(self, dataset, indices):
+        self.indices = indices
+        self.dataset = dataset
+
+    def __len__(self):
+        return len(self.indices)
+    
+    def __getitem__(self, idx):
+        sample, label = self.dataset[self.indices[idx]]
+
+        return sample, label
+
+
 class ModifyLabels(Dataset):
     def __init__(self, original_dataset, transform):
         self.original_dataset = original_dataset

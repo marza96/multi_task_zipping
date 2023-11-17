@@ -109,7 +109,7 @@ def main(model0_path, model1_path, device="cuda"):
     FashionMNISTTrainLoader = torch.utils.data.DataLoader(
         FashionMNISTTrainSet, 
         batch_size=128,
-        shuffle=True, 
+        shuffle=False, 
         num_workers=8
     )
     MNISTTrainSet = torchvision.datasets.MNIST(
@@ -121,14 +121,14 @@ def main(model0_path, model1_path, device="cuda"):
     MNISTTrainLoader = torch.utils.data.DataLoader(
         MNISTTrainSet, 
         batch_size=128,
-        shuffle=True, 
+        shuffle=False, 
         num_workers=8
     )
 
     ConcatTrainLoader = torch.utils.data.DataLoader(
         ConcatDataset((FashionMNISTTrainSet, MNISTTrainSet)), 
         batch_size=128,
-        shuffle=True, 
+        shuffle=False, 
         num_workers=8
     )
 
