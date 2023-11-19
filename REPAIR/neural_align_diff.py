@@ -1,10 +1,11 @@
 import torch
 import scipy
 import copy
+import math
 
 from tqdm import tqdm
 
-from .net_models.mlp import LayerWrapper, CNN
+from .net_models.mlp import LayerWrapper, LayerWrapper2D, CNN
 
 import numpy as np
 import torch.nn as nn
@@ -211,7 +212,7 @@ class NeuralAlignDiff:
         if isinstance(model0, CNN):
             rem_shape = torch.numel(model1.fc2.weight) / model0.channels
             rem_shape /= model0.classes
-            rem_shape = torch.sqrt(rem_shape)
+            rem_shape = int(math.sqrt(rem_shape))
 
             weight = model1.fc2.weight.reshape(model0.classes, model0.channels, rem_shape, rem_shape)
 
@@ -224,13 +225,21 @@ class NeuralAlignDiff:
     def wrap_layers(self, model, rescale):
         wrapped_model = model
 
-        wrapped_model.fc1 = LayerWrapper(wrapped_model.fc1, rescale=rescale)
+        wrapper = LayerWrapper
+        if isinstance(wrapped_model.fc1, nn.Conv2d):
+            wrapper = LayerWrapper2D
+                      
+        wrapped_model.fc1 = wrapper(wrapped_model.fc1, rescale=rescale)
 
         for i in range(len(wrapped_model.layers)):
             layer = wrapped_model.layers[i]
 
             if isinstance(layer, nn.Linear):
-                wrapped_model.layers[i] = LayerWrapper(wrapped_model.layers[i], rescale=rescale)
+                wrapper = LayerWrapper
+                if isinstance(wrapped_model.layers[i], nn.Conv2d):
+                    wrapper = LayerWrapper2D
+
+                wrapped_model.layers[i] = wrapper(wrapped_model.layers[i], rescale=rescale)
 
         return wrapped_model
 
