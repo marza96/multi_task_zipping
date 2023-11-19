@@ -100,7 +100,7 @@ def fuse_from_cfg(train_cfg):
         exp_name       = train_cfg.names[i]["experiment_name"]
         model0_name    = train_cfg.names[i]["model0_name"]
         model1_name    = train_cfg.names[i]["model1_name"]
-        device         = train_cfg.device
+        device         = train_cfg.configs[i]["device"]
         root_path      = train_cfg.root_path
         alpha_split    = train_cfg.alpha_split
 
