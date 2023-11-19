@@ -80,7 +80,7 @@ if __name__ == "__main__":
         0: {
             "loss_fn": CrossEntropyLoss(),
             "epochs" : 20,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": SGD,
                 "args": {
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         1: {
             "loss_fn": CrossEntropyLoss(),
             "epochs": 20,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": SGD,
                 "args": {
