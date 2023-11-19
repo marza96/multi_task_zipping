@@ -67,23 +67,24 @@ class MLP(nn.Module):
     
 
 class CNN(nn.Module):
-    def __init__(self, h=128, layers=5):
+    def __init__(self, channels=128, layers=5, classes=10):
         super().__init__()
         
-        self.h          = h
+        self.classes    = classes
+        self.channels   = channels
         self.num_layers = layers
         self.subnet     = CNNSubnet
-        self.fc1        = nn.Conv2d(1, 64, 3, 1)
+        self.fc1        = nn.Conv2d(1, channels, 3, 1)
 
         mid_layers = []
         for _ in range(layers):
             mid_layers.extend([
-                nn.Conv2d(64, 64, 3, 1),
+                nn.Conv2d(channels, channels, 3, 1),
                 nn.ReLU(),
             ])
 
         self.layers = nn.Sequential(*mid_layers)
-        self.fc2 = nn.Linear(64 * (28 - 2 * (layers + 1)) ** 2, 10)
+        self.fc2 = nn.Linear(channels * (28 - 2 * (layers + 1)) ** 2, classes)
 
     def forward(self, x):
         if x.size(1) == 3:
