@@ -113,7 +113,7 @@ def fuse_from_cfg(train_cfg):
         os.makedirs(root_path + '/plots', exist_ok=True)
         os.makedirs(root_path + '/plots/diff', exist_ok=True)
 
-        neural_align_ = NeuralAlignDiff(loader0, loader1, loaderc)
+        neural_align_ = NeuralAlignDiff(model_cls, loader0, loader1, loaderc)
         permute_and_rescale_acc   = list()
         permute_acc   = list()
         plain_acc     = list()

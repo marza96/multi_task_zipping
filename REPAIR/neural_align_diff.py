@@ -31,15 +31,16 @@ class StraightThroughEstimator(nn.Module):
     
 
 class NeuralAlignDiff:
-    def __init__(self, loader0, loader1, loaderc) -> None:
+    def __init__(self, model_cls, loader0, loader1, loaderc) -> None:
         self.permutations = list()
         self.statistics   = list()
         self.perms_calc   = False
         self.stats_calc   = False
 
-        self.loader0 = loader0
-        self.loader1 = loader1
-        self.loaderc = loaderc
+        self.loader0   = loader0
+        self.loader1   = loader1
+        self.loaderc   = loaderc
+        self.model_cls = model_cls
 
         self.dbg0 = None
 
@@ -237,8 +238,7 @@ class NeuralAlignDiff:
         
 
     def fuse_networks(self, model0, model1, alpha, layers, loader=None, device=None, new_stats=True, permute = True):    
-        # modela = MLP(model0.h, model0.num_layers).to(device)
-        modela = MLP(channels=model0.channels, layers=model0.num_layers, classes=model0.classes).to(device)
+        modela = self.model_cls(channels=model0.channels, layers=model0.num_layers, classes=model0.classes).to(device)
 
         if permute is True:
             model0, model1 = self.align_networks(
