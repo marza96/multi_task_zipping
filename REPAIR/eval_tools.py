@@ -9,6 +9,7 @@ from torch.cuda.amp import autocast
 def evaluate_acc_single_head(model, loader=None, device=None, stop=10e6):
     assert loader is not None
 
+    unique_labels = list()
     model.eval()
     correct = 0
     total = 0
@@ -18,6 +19,13 @@ def evaluate_acc_single_head(model, loader=None, device=None, stop=10e6):
             pred = outputs.argmax(dim=1)
             correct += (labels.to(device) == pred).sum().item()
             total += len(labels)
+
+            unique = torch.unique(labels).cpu().numpy().tolist()
+            unique_labels += unique
+
+            unique_labels = np.unique(unique_labels).tolist()
+            # print(unique_labels)
+            # print(np.all(np.isin(np.arange(10), unique_labels)))
 
             if total > stop:
                 break
