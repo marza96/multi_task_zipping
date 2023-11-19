@@ -110,10 +110,8 @@ def fuse_from_cfg(train_cfg):
         load_model(model0, "%s/pt_models/%s.pt" %(root_path, model0_name))
         load_model(model1, "%s/pt_models/%s.pt" %(root_path, model1_name))
 
-        print("ACC", evaluate_acc_single_head(model0, loader=loader0, device=device))
-        print("ACC", evaluate_acc_single_head(model0, loader=loader1, device=device))
-        print("ACC", evaluate_acc_single_head(model0, loader=loaderc, device=device))
-
+        os.makedirs(root_path + '/plots', exist_ok=True)
+        os.makedirs(root_path + '/plots/diff', exist_ok=True)
 
         neural_align_ = NeuralAlignDiff(loader0, loader1, loaderc)
         permute_and_rescale_acc   = list()
