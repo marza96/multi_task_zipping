@@ -102,12 +102,13 @@ def train_from_cfg(train_cfg):
         optimizer_args = train_cfg.configs[i]["optimizer"]["args"]
         optimizer_cls  = train_cfg.configs[i]["optimizer"]["class"]
         epochs         = train_cfg.configs[i]["epochs"]
+        device         = train_cfg.configs[i]["device"]
         loss_fn        = train_cfg.configs[i]["loss_fn"]
         train_loader   = train_cfg.loaders[i]
         exp_name       = train_cfg.names[i]
-        device         = train_cfg.device
         root_path      = train_cfg.root_path
 
+        print("DEV", device)
         model          = model_cls(**model_args).to(device)
         optimizer      = optimizer_cls(model.parameters(), **optimizer_args)
 
