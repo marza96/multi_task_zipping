@@ -4,7 +4,7 @@ import copy
 
 from tqdm import tqdm
 
-from .net_models.mlp import LayerWrapper, MLP
+from .net_models.mlp import LayerWrapper, CNN
 
 import numpy as np
 import torch.nn as nn
@@ -208,7 +208,14 @@ class NeuralAlignDiff:
         
         weight = model1.fc2.weight
 
-        model1.fc2.weight.data = weight[:, last_perm_map]
+        if isinstance(model0, CNN):
+            rem_shape = torch.numel(model1.fc2.weight) / model0.channels
+            rem_shape /= model0.classes
+            rem_shape = torch.sqrt(rem_shape)
+
+            weight = model1.fc2.weight.reshape(model0.classes, model0.channels, rem_shape, rem_shape)
+
+        model1.fc2.weight.data = weight[:, last_perm_map].reshape(model0.classes, -1)
         self.perms_calc = True
 
         return model0, model1
