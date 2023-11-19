@@ -68,7 +68,7 @@ if __name__ == "__main__":
             "model": MLP,
             "args": {
                 "layers": 5,
-                "channels": 128,
+                "channels": 512,
                 "classes": 10,
             }
         },
