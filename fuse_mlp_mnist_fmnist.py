@@ -22,14 +22,14 @@ def get_datasets():
     )
     mnistTrainSet = torchvision.datasets.MNIST(
         root=path + '/data', 
-        train=True,
+        train=False,
         download=True, 
         transform=transform
     )
 
     fashMnistTrainSet = torchvision.datasets.FashionMNIST(
         root=path + '/data', 
-        train=True,
+        train=False,
         download=True, 
         transform=transform
     )
