@@ -40,17 +40,19 @@ def get_datasets():
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, first_half),
         batch_size=128,
+        shuffle=True,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
         batch_size=128,
+        shuffle=True,
         num_workers=8)
     
     ConcatLoader = torch.utils.data.DataLoader(
         ConcatDataset((torch.utils.data.Subset(mnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
         batch_size=128,
-        shuffle=False, 
+        shuffle=True, 
         num_workers=8
     )
     

@@ -292,12 +292,11 @@ class NeuralAlignDiff:
                     m.reset_running_stats()
             
             with torch.no_grad():
-                for _ in range(5):
-                    for inputs, labels in self.loader0:
-                        o2 = model0_tracked(inputs.to(device))
+                for inputs, labels in self.loader0:
+                    o2 = model0_tracked(inputs.to(device))
 
-                    for inputs, labels in self.loader1:
-                        o1 = model1_tracked(inputs.to(device))
+                for inputs, labels in self.loader1:
+                    o1 = model1_tracked(inputs.to(device))
 
             model0_tracked.eval()
             model1_tracked.eval()
@@ -351,7 +350,7 @@ class NeuralAlignDiff:
                 m.reset_running_stats()
         
         with torch.no_grad():
-            for _ in range(5):
+            for _ in range(3):
                 for inputs, labels in self.loaderc:
                     o1 = modela_tracked(inputs.to(device))
 
