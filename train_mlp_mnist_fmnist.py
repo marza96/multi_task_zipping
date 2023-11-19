@@ -112,8 +112,8 @@ if __name__ == "__main__":
         1: loader1
     }
     train_cfg.names = {
-        0: "mlp_first",
-        1: "mlp_second"
+        0: "mlp_first_mnist_fmnist",
+        1: "mlp_second_mnist_fmnist"
     }
     train_cfg.root_path = os.path.dirname(__file__)
 

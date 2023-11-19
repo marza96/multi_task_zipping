@@ -95,8 +95,8 @@ if __name__ == "__main__":
     fuse_cfg.names = {
         0: {
             "experiment_name": "mlp_first_second",
-            "model0_name": "mlp_first",
-            "model1_name": "mlp_second"
+            "model0_name": "mlp_first_mnist_fmnist",
+            "model1_name": "mlp_second_mnist_fmnist"
         }
     }
     fuse_cfg.root_path = os.path.dirname(__file__)
