@@ -319,8 +319,8 @@ class NeuralAlignDiff:
         model.load_state_dict(sd_alpha)
         
 
-    def fuse_networks(self, model0, model1, alpha, loader=None, device=None, new_stats=True, permute = True):    
-        modela = self.model_cls(channels=model0.channels, layers=model0.num_layers, classes=model0.classes).to(device)
+    def fuse_networks(self, model_args, model0, model1, alpha, loader=None, device=None, new_stats=True, permute = True):    
+        modela = self.model_cls(**model_args).to(device)
 
         if permute is True:
             model0, model1 = self.align_networks_smart(
