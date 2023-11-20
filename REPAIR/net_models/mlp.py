@@ -103,13 +103,14 @@ class CNN(nn.Module):
     
 
 class VGG(nn.Module):
-    def __init__(self, cfg, w=1):
+    def __init__(self, cfg, w=1, classes=10):
         super().__init__()
 
         self.w          = w
         self.layers     = self._make_layers(cfg)
+        self.classes    = classes
         self.subnet     = VGGSubnet
-        self.classifier = nn.Linear(self.w*512, 10)
+        self.classifier = nn.Linear(self.w * cfg[-2], classes)
 
     def forward(self, x):
         out = self.layers(x)
