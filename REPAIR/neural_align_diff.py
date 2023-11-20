@@ -184,7 +184,7 @@ class NeuralAlignDiff:
 
         self.layers_indexed = True
 
-    def align_networks_smart(self, model0, model1, layers, loader=None, device=None):
+    def align_networks_smart(self, model0, model1, loader=None, device=None):
         cl0 = copy.deepcopy(model0.to("cpu")).to(device)
         cl1 = copy.deepcopy(model1.to("cpu")).to(device)
         
@@ -319,14 +319,13 @@ class NeuralAlignDiff:
         model.load_state_dict(sd_alpha)
         
 
-    def fuse_networks(self, model0, model1, alpha, layers, loader=None, device=None, new_stats=True, permute = True):    
+    def fuse_networks(self, model0, model1, alpha, loader=None, device=None, new_stats=True, permute = True):    
         modela = self.model_cls(channels=model0.channels, layers=model0.num_layers, classes=model0.classes).to(device)
 
         if permute is True:
             model0, model1 = self.align_networks_smart(
                 model0, 
                 model1, 
-                layers, 
                 loader=self.loaderc, 
                 device=device
             )

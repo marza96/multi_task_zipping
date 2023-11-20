@@ -74,6 +74,7 @@ def estimate_stats(model, loader, device=None, rescale=False):
     stats_ = model.fc1.get_stats()
     statistics.append(stats_)
 
+
     for i in tqdm.tqdm(range(len(model.layers))):
         if not isinstance(model.layers[i], LayerWrapper):
             continue
@@ -121,7 +122,7 @@ def fuse_from_cfg(train_cfg):
             model0_ = copy.deepcopy(model0)
             model1_ = copy.deepcopy(model1)
 
-            modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, model0_.num_layers, device=device, new_stats=False, permute=False).to(device)
+            modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, device=device, new_stats=False, permute=False).to(device)
 
             plain_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
             if i == 5:
@@ -138,7 +139,7 @@ def fuse_from_cfg(train_cfg):
             model0_ = copy.deepcopy(model0)
             model1_ = copy.deepcopy(model1)
 
-            modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, model0_.num_layers, device=device, new_stats=False, permute=True).to(device)
+            modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, device=device, new_stats=False, permute=True).to(device)
 
             permute_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
 
@@ -155,7 +156,7 @@ def fuse_from_cfg(train_cfg):
             model0_ = copy.deepcopy(model0)
             model1_ = copy.deepcopy(model1)
 
-            modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, model0_.num_layers, device=device, new_stats=True, permute=True).to(device)
+            modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, device=device, new_stats=True, permute=True).to(device)
 
             permute_and_rescale_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
 
@@ -276,7 +277,7 @@ def main(model0_path, model1_path, device="cuda"):
 
     # model0_ = copy.deepcopy(model0)
     # model1_ = copy.deepcopy(model1)
-    # modela_ = neural_align_.fuse_networks(model0_, model1_, 0.5, layers, device=device, new_stats=False, permute=True).to(device)
+    # modela_ = neural_align_.fuse_networks(model0_, model1_, 0.5, layeew_stats=False, permute=True).to(device)
 
     # model0_ = wrap_layers(model0_, rescale=False)
     # modela_ = wrap_layers(modela_, rescale=False)
@@ -287,7 +288,7 @@ def main(model0_path, model1_path, device="cuda"):
 
     # model0_ = copy.deepcopy(model0)
     # model1_ = copy.deepcopy(model1)
-    # modela_ = neural_align_.fuse_networks(model0_, model1_, 0.5, layers, device=device, new_stats=True, permute=True).to(device)
+    # modela_ = neural_align_.fuse_networks(model0_, model1_, 0.5, layeew_stats=True, permute=True).to(device)
 
     # stats0 = estimate_stats(model0_, RMnistTrainLoader, device=device)
     # statsa = estimate_stats(modela_, RMnistTrainLoader, device=device)
@@ -298,7 +299,7 @@ def main(model0_path, model1_path, device="cuda"):
         model0_ = copy.deepcopy(model0)
         model1_ = copy.deepcopy(model1)
 
-        modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, layers, device=device, new_stats=False, permute=False).to(device)
+        modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0,ce, new_stats=False, permute=False).to(device)
 
         plain_acc.append(evaluate_acc_single_head(modela, loader=ConcatTrainLoader, device=device))
         if i == 5:
@@ -315,7 +316,7 @@ def main(model0_path, model1_path, device="cuda"):
         model0_ = copy.deepcopy(model0)
         model1_ = copy.deepcopy(model1)
 
-        modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, layers, device=device, new_stats=False, permute=True).to(device)
+        modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0,ce, new_stats=False, permute=True).to(device)
 
         permute_acc.append(evaluate_acc_single_head(modela, loader=ConcatTrainLoader, device=device))
 
@@ -333,7 +334,7 @@ def main(model0_path, model1_path, device="cuda"):
         model0_ = copy.deepcopy(model0)
         model1_ = copy.deepcopy(model1)
 
-        modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0, layers, device=device, new_stats=True, permute=True).to(device)
+        modela = neural_align_.fuse_networks(model0_, model1_, i / 10.0,ce, new_stats=True, permute=True).to(device)
 
         permute_and_rescale_acc.append(evaluate_acc_single_head(modela, loader=ConcatTrainLoader, device=device))
 
