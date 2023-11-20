@@ -12,6 +12,24 @@ import torch.nn as nn
 
 import matplotlib.pyplot as plt
 
+class STEFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        return (input > 0).float()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return F.hardtanh(grad_output)
+    
+
+class StraightThroughEstimator(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+            x = STEFunction.apply(x)
+            return x
+    
 
 class NeuralAlignDiff:
     def __init__(self, model_cls, loader0, loader1, loaderc) -> None:
@@ -166,7 +184,7 @@ class NeuralAlignDiff:
 
         self.layers_indexed = True
 
-    def align_networks(self, model0, model1, loader=None, device=None):
+    def align_networks_smart(self, model0, model1, loader=None, device=None):
         cl0 = copy.deepcopy(model0.to("cpu")).to(device)
         cl1 = copy.deepcopy(model1.to("cpu")).to(device)
         
@@ -207,55 +225,7 @@ class NeuralAlignDiff:
 
         return model0, model1
 
-    def align_networks(self, model0, model1, layers, loader=None, device=None):
-        cl0 = copy.deepcopy(model0.to("cpu")).to(device)
-        cl1 = copy.deepcopy(model1.to("cpu")).to(device)
-
-        if self.perms_calc is False:
-            perm_map_, corr_mtx = self.get_layer_perm(model0.subnet(cl0, layer_i=0), model1.subnet(cl1, layer_i=0), epochs=1, loader=loader, device=device)
-            self.permutations.append(perm_map_)
-        
-        perm_map = self.permutations[0]
-        weight   = model1.fc1.weight
-        bias     = model1.fc1.bias
-
-        model1.fc1.weight.data = weight[perm_map].clone()
-        model1.fc1.bias.data   = bias[perm_map].clone()
-
-        last_perm_map = perm_map
-
-        for i in range(layers):
-            if self.perms_calc is False:
-                perm_map_, corr_mtx = self.get_layer_perm(model0.subnet(cl0, layer_i=i + 1), model1.subnet(cl1, layer_i=i + 1), epochs=1, loader=loader, device=device)
-                self.permutations.append(perm_map_)
-
-            perm_map = self.permutations[i + 1]
-            weight   = model1.layers[2 * i].weight
-            bias     = model1.layers[2 * i].bias  
-
-            model1.layers[2 * i].weight.data = weight[perm_map].clone()
-            model1.layers[2 * i].bias.data   = bias[perm_map].clone()
-
-            weight   = model1.layers[2 * i].weight
-
-            model1.layers[2 * i].weight.data = weight[:, last_perm_map].clone()
-            last_perm_map = perm_map
-        
-        weight = model1.fc2.weight
-
-        if isinstance(model0, CNN):
-            rem_shape = torch.numel(model1.fc2.weight) / model0.channels
-            rem_shape /= model0.classes
-            rem_shape = int(math.sqrt(rem_shape))
-
-            weight = model1.fc2.weight.reshape(model0.classes, model0.channels, rem_shape, rem_shape)
-
-        model1.fc2.weight.data = weight[:, last_perm_map].reshape(model0.classes, -1)
-        self.perms_calc = True
-
-        return model0, model1
-
-    def wrap_layers(self, model, rescale):
+    def wrap_layers_smart(self, model, rescale):
         wrapped_model = model
         
         for i, layer_idx in enumerate(self.layer_indices):
@@ -269,6 +239,7 @@ class NeuralAlignDiff:
 
         return wrapped_model
 
+
     def mix_weights(self, model, model0, model1, alpha):
         sd0 = model0.state_dict()
         sd1 = model1.state_dict()
@@ -277,11 +248,12 @@ class NeuralAlignDiff:
         
         model.load_state_dict(sd_alpha)
         
+
     def fuse_networks(self, model_args, model0, model1, alpha, loader=None, device=None, new_stats=True, permute = True):    
         modela = self.model_cls(**model_args).to(device)
 
         if permute is True:
-            model0, model1 = self.align_networks(
+            model0, model1 = self.align_networks_smart(
                 model0, 
                 model1, 
                 loader=self.loaderc, 
@@ -294,12 +266,12 @@ class NeuralAlignDiff:
         if new_stats is False:
             return modela
         
-        return self.REPAIR(alpha, model0, model1, modela, loader=loader, device=device)
+        return self.REPAIR_smart(alpha, model0, model1, modela, loader=loader, device=device)
     
-    def REPAIR(self, alpha, model0, model1, modela, loader=None, device=None):
-        model0_tracked = self.wrap_layers(model0, rescale=False).to(device)
-        model1_tracked = self.wrap_layers(model1, rescale=False).to(device)
-        modela_tracked = self.wrap_layers(modela, rescale=False).to(device)
+    def REPAIR_smart(self, alpha, model0, model1, modela, loader=None, device=None):
+        model0_tracked = self.wrap_layers_smart(model0, rescale=False).to(device)
+        model1_tracked = self.wrap_layers_smart(model1, rescale=False).to(device)
+        modela_tracked = self.wrap_layers_smart(modela, rescale=False).to(device)
 
         if self.stats_calc is False:
             model0_tracked.train()
