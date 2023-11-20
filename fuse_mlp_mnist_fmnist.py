@@ -96,7 +96,7 @@ if __name__ == "__main__":
     }
     fuse_cfg.names = {
         0: {
-            "experiment_name": "mlp_first_second",
+            "experiment_name": "fuse_mlp_mnist_fmnist",
             "model0_name": "mlp_first_mnist_fmnist",
             "model1_name": "mlp_second_mnist_fmnist"
         }

@@ -90,7 +90,7 @@ if __name__ == "__main__":
     }
     fuse_cfg.names = {
         0: {
-            "experiment_name": "mlp_first_second",
+            "experiment_name": "fuse_vgg_cifar_split",
             "model0_name": "vgg_first",
             "model1_name": "vgg_second"
         }
