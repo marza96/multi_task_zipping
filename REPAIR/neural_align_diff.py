@@ -33,10 +33,12 @@ class StraightThroughEstimator(nn.Module):
 
 class NeuralAlignDiff:
     def __init__(self, model_cls, loader0, loader1, loaderc) -> None:
-        self.permutations = list()
-        self.statistics   = list()
-        self.perms_calc   = False
-        self.stats_calc   = False
+        self.permutations   = list()
+        self.statistics     = list()
+        self.layer_indices  = list()
+        self.perms_calc     = False
+        self.stats_calc     = False
+        self.layers_indexed = False
 
         self.loader0   = loader0
         self.loader1   = loader1
@@ -72,7 +74,6 @@ class NeuralAlignDiff:
                     F += prod
 
         return F
-                
 
     def run_corr_matrix(self, net0, net1, epochs=1, loader=None, device=None):
         n = epochs * len(loader)
@@ -173,6 +174,57 @@ class NeuralAlignDiff:
     def geet_layer_perm_ste(self, net0, net1, epochs=1, loader=None, device=None):
         pass
 
+    def index_layers(self, model):
+        if self.layers_indexed is True:
+            return
+        
+        for idx, m in enumerate(model.layers):
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+                self.layer_indices.append(idx)
+
+        self.layers_indexed = True
+
+    def align_networks_smart(self, model0, model1, layers, loader=None, device=None):
+        cl0 = copy.deepcopy(model0.to("cpu")).to(device)
+        cl1 = copy.deepcopy(model1.to("cpu")).to(device)
+        
+        self.index_layers(model0)
+
+        last_perm_map = None
+        for i, layer_idx in enumerate(self.layer_indices):
+            if self.perms_calc is False:
+                perm_map_, corr_mtx = self.get_layer_perm(
+                    model0.subnet(cl0, layer_i=layer_idx), 
+                    model1.subnet(cl1, layer_i=layer_idx), 
+                    epochs=1, 
+                    loader=loader, 
+                    device=device
+                )
+                self.permutations.append(perm_map_)
+
+            perm_map = self.permutations[i]
+            weight   = model1.layers[layer_idx].weight
+            bias     = model1.layers[layer_idx].bias
+
+            model1.layers[layer_idx].weight.data = weight[perm_map].clone()
+            model1.layers[layer_idx].bias.data   = bias[perm_map].clone()
+
+            weight   = model1.layers[layer_idx].weight
+
+            if i > 0:
+                model1.layers[layer_idx].weight.data = weight[:, last_perm_map].clone()
+
+            last_perm_map = perm_map
+
+        last_perm_map = self.permutations[-1]
+        weight = model1.classifier.weight
+
+        model1.classifier.weight.data = weight[:, last_perm_map].clone()
+
+        self.perms_calc = True
+
+        return model0, model1
+
     def align_networks(self, model0, model1, layers, loader=None, device=None):
         cl0 = copy.deepcopy(model0.to("cpu")).to(device)
         cl1 = copy.deepcopy(model1.to("cpu")).to(device)
@@ -221,7 +273,6 @@ class NeuralAlignDiff:
 
         return model0, model1
 
-
     def wrap_layers(self, model, rescale):
         wrapped_model = model
 
@@ -242,6 +293,21 @@ class NeuralAlignDiff:
                 wrapped_model.layers[i] = wrapper(wrapped_model.layers[i], rescale=rescale)
 
         return wrapped_model
+    
+
+    def wrap_layers_smart(self, model, rescale):
+        wrapped_model = model
+        
+        for i, layer_idx in enumerate(self.layer_indices):
+            layer = model.layers[layer_idx]
+
+            wrapper = LayerWrapper
+            if isinstance(layer, nn.Conv2d):
+                wrapper = LayerWrapper2D
+
+            wrapped_model.layers[layer_idx] = wrapper(layer, rescale=rescale)
+
+        return wrapped_model
 
 
     def mix_weights(self, model, model0, model1, alpha):
@@ -257,7 +323,7 @@ class NeuralAlignDiff:
         modela = self.model_cls(channels=model0.channels, layers=model0.num_layers, classes=model0.classes).to(device)
 
         if permute is True:
-            model0, model1 = self.align_networks(
+            model0, model1 = self.align_networks_smart(
                 model0, 
                 model1, 
                 layers, 
@@ -271,12 +337,76 @@ class NeuralAlignDiff:
         if new_stats is False:
             return modela
         
-        return self.REPAIR(alpha, model0, model1, modela, loader=loader, device=device)
+        return self.REPAIR_smart(alpha, model0, model1, modela, loader=loader, device=device)
+    
+    def REPAIR_smart(self, alpha, model0, model1, modela, loader=None, device=None):
+        model0_tracked = self.wrap_layers_smart(model0, rescale=False).to(device)
+        model1_tracked = self.wrap_layers_smart(model1, rescale=False).to(device)
+        modela_tracked = self.wrap_layers_smart(modela, rescale=False).to(device)
+
+        if self.stats_calc is False:
+            model0_tracked.train()
+            model1_tracked.train()
+            for m in model0_tracked.modules():
+                if isinstance(m, nn.modules.batchnorm._BatchNorm):
+                    m.momentum = None
+                    m.reset_running_stats()
+
+            for m in model1_tracked.modules():
+                if isinstance(m, nn.modules.batchnorm._BatchNorm):
+                    m.momentum = None
+                    m.reset_running_stats()
+            
+            with torch.no_grad():
+                for inputs, labels in self.loader0:
+                    _ = model0_tracked(inputs.to(device))
+
+                for inputs, labels in self.loader1:
+                    _ = model1_tracked(inputs.to(device))
+
+            model0_tracked.eval()
+            model1_tracked.eval()
+            
+            for i, layer_idx in enumerate(self.layer_indices):
+                layer0 = model0_tracked.layers[layer_idx]
+                layer1 = model1_tracked.layers[layer_idx]
+
+                stats0_ = layer0.get_stats()
+                stats1_ = layer1.get_stats()
+
+                self.statistics.append((stats0_, stats1_))
+
+        for i, layer_idx in enumerate(self.layer_indices):
+            stats0 = self.statistics[i][0]
+            stats1 = self.statistics[i][1]
+
+            mean = (1.0 - alpha) * stats0[0] + alpha * stats1[0]
+            std = ((1.0 - alpha) * stats0[1].sqrt() + alpha * stats1[1].sqrt()).square()
+    
+            modela_tracked.layers[layer_idx].set_stats(mean, std)
+            modela_tracked.layers[layer_idx].rescale = True
+
+        modela_tracked.train()
+        for m in modela_tracked.modules():
+            if isinstance(m, nn.modules.batchnorm._BatchNorm):
+                m.momentum = None
+                m.reset_running_stats()
         
+        with torch.no_grad():
+            for _ in range(3):
+                for inputs, labels in self.loaderc:
+                    _ = modela_tracked(inputs.to(device))
+
+        modela_tracked.eval()
+        
+        self.stats_calc = True
+
+        return modela_tracked
+    
     def REPAIR(self, alpha, model0, model1, modela, loader=None, device=None):
-        model0_tracked = self.wrap_layers(model0, rescale=False).to(device)
-        model1_tracked = self.wrap_layers(model1, rescale=False).to(device)
-        modela_tracked = self.wrap_layers(modela, rescale=False).to(device)
+        model0_tracked = self.wrap_layers_smart(model0, rescale=False).to(device)
+        model1_tracked = self.wrap_layers_smart(model1, rescale=False).to(device)
+        modela_tracked = self.wrap_layers_smart(modela, rescale=False).to(device)
 
         if self.stats_calc is False:
             model0_tracked.train()

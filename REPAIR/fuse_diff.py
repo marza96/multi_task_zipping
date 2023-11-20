@@ -74,7 +74,6 @@ def estimate_stats(model, loader, device=None, rescale=False):
     stats_ = model.fc1.get_stats()
     statistics.append(stats_)
 
-
     for i in tqdm.tqdm(range(len(model.layers))):
         if not isinstance(model.layers[i], LayerWrapper):
             continue
