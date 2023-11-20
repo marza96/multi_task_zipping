@@ -12,24 +12,6 @@ import torch.nn as nn
 
 import matplotlib.pyplot as plt
 
-class STEFunction(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, input):
-        return (input > 0).float()
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        return F.hardtanh(grad_output)
-    
-
-class StraightThroughEstimator(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-            x = STEFunction.apply(x)
-            return x
-    
 
 class NeuralAlignDiff:
     def __init__(self, model_cls, loader0, loader1, loaderc) -> None:
@@ -184,7 +166,7 @@ class NeuralAlignDiff:
 
         self.layers_indexed = True
 
-    def align_networks_smart(self, model0, model1, loader=None, device=None):
+    def align_networks(self, model0, model1, loader=None, device=None):
         cl0 = copy.deepcopy(model0.to("cpu")).to(device)
         cl1 = copy.deepcopy(model1.to("cpu")).to(device)
         
@@ -275,28 +257,6 @@ class NeuralAlignDiff:
 
     def wrap_layers(self, model, rescale):
         wrapped_model = model
-
-        wrapper = LayerWrapper
-        if isinstance(wrapped_model.fc1, nn.Conv2d):
-            wrapper = LayerWrapper2D
-                      
-        wrapped_model.fc1 = wrapper(wrapped_model.fc1, rescale=rescale)
-
-        for i in range(len(wrapped_model.layers)):
-            layer = wrapped_model.layers[i]
-
-            if isinstance(layer, nn.Linear):
-                wrapper = LayerWrapper
-                if isinstance(wrapped_model.layers[i], nn.Conv2d):
-                    wrapper = LayerWrapper2D
-
-                wrapped_model.layers[i] = wrapper(wrapped_model.layers[i], rescale=rescale)
-
-        return wrapped_model
-    
-
-    def wrap_layers_smart(self, model, rescale):
-        wrapped_model = model
         
         for i, layer_idx in enumerate(self.layer_indices):
             layer = model.layers[layer_idx]
@@ -309,7 +269,6 @@ class NeuralAlignDiff:
 
         return wrapped_model
 
-
     def mix_weights(self, model, model0, model1, alpha):
         sd0 = model0.state_dict()
         sd1 = model1.state_dict()
@@ -318,12 +277,11 @@ class NeuralAlignDiff:
         
         model.load_state_dict(sd_alpha)
         
-
     def fuse_networks(self, model_args, model0, model1, alpha, loader=None, device=None, new_stats=True, permute = True):    
         modela = self.model_cls(**model_args).to(device)
 
         if permute is True:
-            model0, model1 = self.align_networks_smart(
+            model0, model1 = self.align_networks(
                 model0, 
                 model1, 
                 loader=self.loaderc, 
@@ -336,12 +294,12 @@ class NeuralAlignDiff:
         if new_stats is False:
             return modela
         
-        return self.REPAIR_smart(alpha, model0, model1, modela, loader=loader, device=device)
+        return self.REPAIR(alpha, model0, model1, modela, loader=loader, device=device)
     
-    def REPAIR_smart(self, alpha, model0, model1, modela, loader=None, device=None):
-        model0_tracked = self.wrap_layers_smart(model0, rescale=False).to(device)
-        model1_tracked = self.wrap_layers_smart(model1, rescale=False).to(device)
-        modela_tracked = self.wrap_layers_smart(modela, rescale=False).to(device)
+    def REPAIR(self, alpha, model0, model1, modela, loader=None, device=None):
+        model0_tracked = self.wrap_layers(model0, rescale=False).to(device)
+        model1_tracked = self.wrap_layers(model1, rescale=False).to(device)
+        modela_tracked = self.wrap_layers(modela, rescale=False).to(device)
 
         if self.stats_calc is False:
             model0_tracked.train()
@@ -402,90 +360,3 @@ class NeuralAlignDiff:
 
         return modela_tracked
     
-    def REPAIR(self, alpha, model0, model1, modela, loader=None, device=None):
-        model0_tracked = self.wrap_layers_smart(model0, rescale=False).to(device)
-        model1_tracked = self.wrap_layers_smart(model1, rescale=False).to(device)
-        modela_tracked = self.wrap_layers_smart(modela, rescale=False).to(device)
-
-        if self.stats_calc is False:
-            model0_tracked.train()
-            model1_tracked.train()
-            for m in model0_tracked.modules():
-                if isinstance(m, nn.modules.batchnorm._BatchNorm):
-                    m.momentum = None
-                    m.reset_running_stats()
-
-            for m in model1_tracked.modules():
-                if isinstance(m, nn.modules.batchnorm._BatchNorm):
-                    m.momentum = None
-                    m.reset_running_stats()
-            
-            with torch.no_grad():
-                for inputs, labels in self.loader0:
-                    o2 = model0_tracked(inputs.to(device))
-
-                for inputs, labels in self.loader1:
-                    o1 = model1_tracked(inputs.to(device))
-
-            model0_tracked.eval()
-            model1_tracked.eval()
-            
-            stats0_ = model0_tracked.fc1.get_stats()
-            stats1_ = model1_tracked.fc1.get_stats()
-
-            self.statistics.append((stats0_, stats1_))
-
-            for i in range(len(model0.layers)):
-                if not isinstance(model0_tracked.layers[i], LayerWrapper):
-                    continue
-
-                stats0_ = model0_tracked.layers[i].get_stats()
-                stats1_ = model1_tracked.layers[i].get_stats()
-
-                self.statistics.append((stats0_, stats1_))
-
-        stats0 = self.statistics[0][0]
-        stats1 = self.statistics[0][1]
-
-        mean = (1.0 - alpha) * stats0[0] + alpha * stats1[0]
-        std = ((1.0 - alpha) * stats0[1].sqrt() + alpha *stats1[1].sqrt()).square()
-        
-        modela_tracked.fc1.set_stats(mean, std)
-        modela_tracked.fc1.rescale = True
-
-        cnt = 1
-        for i in range(len(model0.layers)):
-            if not isinstance(model0_tracked.layers[i], LayerWrapper):
-                continue
-
-            # stats0 = model0_tracked.layers[i].get_stats()
-            # stats1 = model1_tracked.layers[i].get_stats()
-
-            stats0 = self.statistics[cnt][0]
-            stats1 = self.statistics[cnt][1]
-
-            mean = (1.0 - alpha) * stats0[0] + alpha * stats1[0]
-            std = ((1.0 - alpha) * stats0[1].sqrt() + alpha * stats1[1].sqrt()).square()
-    
-            modela_tracked.layers[i].set_stats(mean, std)
-            modela_tracked.layers[i].rescale = True
-
-            cnt += 1
-        
-        modela_tracked.train()
-        for m in modela_tracked.modules():
-            if isinstance(m, nn.modules.batchnorm._BatchNorm):
-                m.momentum = None
-                m.reset_running_stats()
-        
-        with torch.no_grad():
-            for _ in range(3):
-                for inputs, labels in self.loaderc:
-                    o1 = modela_tracked(inputs.to(device))
-
-        modela_tracked.eval()
-        
-        self.stats_calc = True
-
-        return modela_tracked
-        
