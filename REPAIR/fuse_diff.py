@@ -120,7 +120,7 @@ def fuse_from_cfg(train_cfg):
 
         plot_stuff(
             np.linspace(0, 1.0, alpha_split), 
-            permute_acc,
+            permute_and_rescale_acc,
             "alpha",
             "acc",
             ["plain fusion", "permuted fusion", "REPAIR fusion"],
