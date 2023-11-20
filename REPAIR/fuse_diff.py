@@ -30,7 +30,6 @@ def load_model(model, i):
 
 
 def plot_stuff(x, y, x_label, y_label, legend, path):
-    plt.figure()
     plt.plot(x, y)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
@@ -77,6 +76,8 @@ def fuse_from_cfg(train_cfg):
             if i == 5:
                 print("plain acc: ", plain_acc[-1])
 
+        plt.figure()
+
         plot_stuff(
             np.linspace(0, 1.0, alpha_split), 
             plain_acc, 
@@ -85,12 +86,6 @@ def fuse_from_cfg(train_cfg):
             ["plain fusion"], 
             root_path + '/plots/%s/plain.png' % exp_name
         )
-        # plt.figure()
-        # plt.plot(np.linspace(0, 1.0, alpha_split), plain_acc)
-        # plt.xlabel("alpha")
-        # plt.ylabel("acc")
-        # plt.legend(["plain fusion"])
-        # plt.savefig("%s/plots/diff/plain.png" % root_path)
 
         for i in tqdm.tqdm(range(alpha_split)):
             model0_ = copy.deepcopy(model0)
@@ -111,11 +106,6 @@ def fuse_from_cfg(train_cfg):
             ["plain fusion", "permuted fusion"],
             root_path + '/plots/%s/permute.png' % exp_name
         )
-        # plt.plot(np.linspace(0, 1.0, alpha_split), permute_acc)
-        # plt.xlabel("alpha")
-        # plt.ylabel("acc")
-        # plt.legend(["plain fusion", "permuted fusion"])
-        # plt.savefig("%s/plots/diff/permute.png" % root_path)
 
         for i in tqdm.tqdm(range(alpha_split)):
             model0_ = copy.deepcopy(model0)
@@ -127,12 +117,6 @@ def fuse_from_cfg(train_cfg):
 
             if i == 5:
                 print("permute_and_scale acc: ", permute_and_rescale_acc[-1])
-
-        # plt.plot(np.linspace(0, 1.0, alpha_split), permute_and_rescale_acc)
-        # plt.xlabel("alpha")
-        # plt.ylabel("acc")
-        # plt.legend(["plain fusion", "permuted fusion", "REPAIR fusion"])
-        # plt.savefig("%s/plots/diff/repair.png" % root_path)
 
         plot_stuff(
             np.linspace(0, 1.0, alpha_split), 
