@@ -62,16 +62,16 @@ if __name__ == "__main__":
         0: {
             "model": CNN,
             "args": {
-                "layers": 5,
-                "channels": 128,
+                "layers": 2,
+                "channels": 32,
                 "classes": 10,
             }
         },
         1: {
             "model": CNN,
             "args": {
-                "layers": 5,
-                "channels": 128,
+                "layers": 2,
+                "channels": 32,
                 "classes": 10,
             }
         }
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 20,
+            "epochs" : 10,
             "device": "cuda",
             "optimizer": {
                 "class": SGD,
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         },
         1: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 20,
+            "epochs": 10,
             "device": "cuda",
             "optimizer": {
                 "class": SGD,

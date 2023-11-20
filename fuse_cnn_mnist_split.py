@@ -22,7 +22,7 @@ def get_datasets():
     )
     mnistTrainSet = torchvision.datasets.MNIST(
         root=path + '/data', 
-        train=True,
+        train=False,
         download=True, 
         transform=transform
     )
@@ -69,7 +69,7 @@ if __name__ == "__main__":
             "model": CNN,
             "args": {
                 "layers": 5,
-                "channels": 128,
+                "channels": 256,
                 "classes": 10,
             }
         },
