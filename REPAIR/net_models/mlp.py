@@ -144,8 +144,7 @@ class CNNSubnet(nn.Module):
         if x.size(1) == 3:
             x = x.mean(1, keepdim=True)
 
-        x = F.relu(self.model.fc1(x))
-        x = self.model.layers[:2 * self.layer_i](x)
+        x = self.model.layers[:self.layer_i + 1](x)
         
         return x
 
