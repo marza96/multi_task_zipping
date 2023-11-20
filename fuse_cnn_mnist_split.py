@@ -68,8 +68,8 @@ if __name__ == "__main__":
         0: {
             "model": CNN,
             "args": {
-                "layers": 5,
-                "channels": 256,
+                "layers": 2,
+                "channels": 32,
                 "classes": 10,
             }
         },
