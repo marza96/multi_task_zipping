@@ -121,6 +121,7 @@ class VGG(nn.Module):
     def _make_layers(self, cfg):
         layers = []
         in_channels = 3
+
         for x in cfg:
             if x == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
@@ -173,9 +174,6 @@ class VGGSubnet(nn.Module):
         self.layer_i = layer_i
 
     def forward(self, x):
-        if x.size(1) == 3:
-            x = x.mean(1, keepdim=True)
-
         x = self.model.layers[:self.layer_i + 1](x)
         
         return x

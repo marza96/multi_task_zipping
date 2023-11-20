@@ -140,7 +140,7 @@ class NeuralAlignDiff:
         return perm
 
     def get_layer_perm(self, net0, net1, epochs=1, loader=None, device=None):
-        corr_mtx = self.run_act_similarity(net0, net1, epochs=1, loader=loader, device=device)
+        corr_mtx = self.run_corr_matrix(net0, net1, epochs=1, loader=loader, device=device)
 
         return self.optimize_corr(corr_mtx), corr_mtx
     
