@@ -4,12 +4,12 @@ import torchvision
 
 import torchvision.transforms as transforms
 
-from torch.optim import SGD
 from torch.nn import CrossEntropyLoss
+from torch.utils.data import ConcatDataset
 
-from REPAIR.train import train_from_cfg
+from REPAIR.fuse_diff import fuse_from_cfg
 from REPAIR.net_models.mlp import VGG
-from REPAIR.train_cfg import BaseTrainCfg
+from REPAIR.fuse_cfg import BaseFuseCfg
 
 
 def get_datasets():
@@ -49,16 +49,23 @@ def get_datasets():
         shuffle=True,
         num_workers=8)
     
-    return FirstHalfLoader, SecondHalfLoader
+    ConcatLoader = torch.utils.data.DataLoader(
+        ConcatDataset((torch.utils.data.Subset(mnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
+        batch_size=128,
+        shuffle=True, 
+        num_workers=8
+    )
+    
+    return FirstHalfLoader, SecondHalfLoader, ConcatLoader
 
 
 if __name__ == "__main__":
-    loader0, loader1 = get_datasets()
+    loader0, loader1, loaderc = get_datasets()
 
-    train_cfg = BaseTrainCfg(num_experiments=2)
+    fuse_cfg = BaseFuseCfg(num_experiments=1, alpha_split=10)
 
     vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
-    train_cfg.models = {
+    fuse_cfg.models = {
         0: {
             "model": VGG,
             "args": {
@@ -67,49 +74,27 @@ if __name__ == "__main__":
                 "classes": 10,
             }
         },
-        1: {
-            "model": VGG,
-            "args": {
-                "w": 1,
-                "cfg": vgg_cfg,
-                "classes": 10,
-            }
-        }
     }
-    train_cfg.configs = {
+    fuse_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 20,
             "device": "cuda",
-            "optimizer": {
-                "class": SGD,
-                "args": {
-                    "lr": 0.01,
-                    "momentum": 0.9
-                }
-            }
         },
-        1: {
-            "loss_fn": CrossEntropyLoss(),
-            "epochs": 20,
-            "device": "cuda",
-            "optimizer": {
-                "class": SGD,
-                "args": {
-                    "lr": 0.01,
-                    "momentum": 0.9
-                }
-            }
+    }
+    fuse_cfg.loaders = {
+        0: {
+            "loader0": loader0,
+            "loader1": loader1,
+            "loaderc": loaderc,
         }
     }
-    train_cfg.loaders = {
-        0: loader0,
-        1: loader1
+    fuse_cfg.names = {
+        0: {
+            "experiment_name": "mlp_first_second",
+            "model0_name": "mlp_first",
+            "model1_name": "mlp_second"
+        }
     }
-    train_cfg.names = {
-        0: "cnn_first",
-        1: "cnn_second"
-    }
-    train_cfg.root_path = os.path.dirname(__file__)
+    fuse_cfg.root_path = os.path.dirname(__file__)
 
-    train_from_cfg(train_cfg)
+    fuse_from_cfg(fuse_cfg)
