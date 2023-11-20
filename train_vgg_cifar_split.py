@@ -20,7 +20,7 @@ def get_datasets():
             transforms.ToTensor(),
         ]
     )
-    mnistTrainSet = torchvision.datasets.MNIST(
+    mnistTrainSet = torchvision.datasets.CIFAR10(
         root=path + '/data', 
         train=True,
         download=True, 
