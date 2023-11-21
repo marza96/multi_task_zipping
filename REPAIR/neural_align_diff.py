@@ -117,7 +117,7 @@ class NeuralAlignDiff:
 
         return corr
 
-    def optimize_corr(self, corr_mtx):
+    def solve_lap(self, corr_mtx):
         corr_mtx_a = corr_mtx.cpu().numpy()
         row_ind, col_ind = scipy.optimize.linear_sum_assignment(corr_mtx_a, maximize=True)
 
@@ -140,39 +140,84 @@ class NeuralAlignDiff:
         return perm
 
     def get_layer_perm(self, net0, net1, epochs=1, loader=None, device=None):
-        corr_mtx = self.run_corr_matrix(net0, net1, epochs=1, loader=loader, device=device)
+        corr_mtx = self.run_corr_matrix(
+            net0, 
+            net1, 
+            epochs=1, 
+            loader=loader, 
+            device=device
+        )
 
-        return self.optimize_corr(corr_mtx), corr_mtx
+        return self.solve_lap(corr_mtx), corr_mtx
     
-    def perm_coord_descent(self, net0, net1, epochs=1, loader=None, device=None):
-        perm_mats = [None for _ in range(net0.num_layers + 2)]
-        perm_mats[0] = torch.eye(net0.fc1.weight.shape[1], net0.fc1.weight.shape[1])
+    def perm_coord_descent(self, net0, net1, epochs=10, device=None):
+        weights0 = [net0.layers[layer_i].weight.clone() for layer_i in self.layer_indices]
+        weights1 = [net1.layers[layer_i].weight.clone() for layer_i in self.layer_indices]
 
-        for i in range(net0.num_layers):
-            perm_mats[i + 1] = torch.eye(net0.layers[2 * i].weight.shape[1], net0.layers[2 * i].weight.shape[1])
+        weights0.append(net0.classifier.weight.clone())
+        weights1.append(net1.classifier.weight.clone())
 
-        perm_mats[-1] = torch.eye(net0.fc2.weight.shape[1], net0.fc2.weight.shape[1])
-        
-        w_0 = net0.fc1.weight.clone()
-        w_1 = net0.layers[0].weight.clone()
-        obj = w_0 @ perm_mats[0] @ w_0.T + w_1.T @ perm_mats[1] @ w_1
-        
-        w_i = w_1
-        for i in range(net0.num_layers):
-            if i < net0.num_layers - 1:
-                w_ii = net0.layers[2 * (i + 1)].weight.clone()
-            else:
-                w_ii = net0.fc2.weight.clone()
-            
-            obj = w_i @ perm_mats[i + 1] @ w_i.T 
+        perm_mats = [None for _ in range(len(self.layer_indices) + 1)]
 
-            if i < net0.num_layers - 1:
-                obj += w_ii.T @ perm_mats[i + 2] @ w_ii
+        for i in range(len(self.layer_indices)):
+            perm_mats[i] = torch.eye(
+                weights0[i].shape[1], 
+                weights0[i].shape[1]
+            )
 
-            w_i = w_ii  
+        perm_mats[-1] = torch.eye(
+            weights0[-1].shape[1], 
+            weights0[-1].shape[1]
+        )
 
-    def geet_layer_perm_ste(self, net0, net1, epochs=1, loader=None, device=None):
-        pass
+        for _ in range(epochs):
+            for i in torch.randperm(len(self.layer_indices)):
+                w_0i    = weights0[i]
+                w_1i    = weights1[i]
+
+                w_0ii    = weights0[i + 1] 
+                w_1ii    = weights1[i + 1] 
+                
+                obj = w_0i @ perm_mats[i] @ w_1i.T 
+
+                if i < net0.num_layers - 1:
+                    obj += w_0ii.T @ perm_mats[i + 1] @ w_1ii
+
+                perm_mats[i] = self.perm_to_permmat(self.solve_lap(obj))
+
+        return [self.permmat_to_perm(perm_mat) for perm_mat in perm_mats]
+
+        # for i, layyer_idx in range(net0.layers):
+        #     perm_mats[i] = torch.eye(
+        #         net0.layers[layyer_idx].weight.shape[1], 
+        #         net0.layers[layyer_idx].weight.shape[1]
+        #     )
+
+        # perm_mats[-1] = torch.eye(
+        #     net0.classifier.weight.shape[1], 
+        #     net0.classifier.weight.shape[1]
+        # )
+
+        # for _ in range(epochs):
+        #     for i in torch.randperm(len(self.layer_indices)):
+        #         layer_i = self.layer_indices[i]
+        #         w_0i    = net0.layers[layer_i].weight.clone()
+        #         w_1i    = net1.layers[layer_i].weight.clone()
+
+        #         if i < len(self.layer_indices) - 1:
+        #             layer_ii = self.layer_indices[i + 1]
+        #             w_0ii    = net0.layers[layer_ii].weight.clone()
+        #             w_1ii    = net1.layers[layer_ii].weight.clone()
+        #         else:
+        #             w_0ii = net0.classifier.weight.clone()
+        #             w_1ii = net1.classifier.weight.clone()
+                
+        #         obj = w_0i @ perm_mats[i] @ w_1i.T 
+
+        #         if i < net0.num_layers - 1:
+        #             obj += w_0ii.T @ perm_mats[i + 1] @ w_1ii
+
+        #         perm_mats[i] = self.perm_to_permmat(self.solve_lap(obj))
 
     def index_layers(self, model):
         if self.layers_indexed is True:
@@ -209,7 +254,7 @@ class NeuralAlignDiff:
             model1.layers[layer_idx].weight.data = weight[perm_map].clone()
             model1.layers[layer_idx].bias.data   = bias[perm_map].clone()
 
-            weight   = model1.layers[layer_idx].weight
+            weight = model1.layers[layer_idx].weight
 
             if i > 0:
                 model1.layers[layer_idx].weight.data = weight[:, last_perm_map].clone()
