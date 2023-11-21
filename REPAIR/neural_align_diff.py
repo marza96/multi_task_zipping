@@ -232,7 +232,9 @@ class NeuralAlignDiff:
     def align_networks_smart(self, model0, model1, loader=None, device=None):
         cl0 = copy.deepcopy(model0.to("cpu")).to(device)
         cl1 = copy.deepcopy(model1.to("cpu")).to(device)
-        
+
+        self.perm_coord_descent(self, cl0, cl1, epochs=1, device=device)
+
         self.index_layers(model0)
 
         last_perm_map = None
