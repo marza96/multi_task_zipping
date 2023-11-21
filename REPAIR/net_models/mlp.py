@@ -3,38 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# class MLP(nn.Module):
-#     def __init__(self, channels=128, layers=3, classes=10):
-#         super().__init__()
-
-#         self.classes    = classes
-#         self.channels   = channels
-#         self.num_layers = layers
-#         self.subnet     = Subnet
-#         self.fc1        = nn.Linear(28*28, channels, bias=True)
-        
-#         mid_layers = []
-#         for _ in range(layers):
-#             mid_layers.extend([
-#                 nn.Linear(channels, channels, bias=True),
-#                 nn.ReLU(),
-#             ])
-            
-#         self.layers = nn.Sequential(*mid_layers)
-#         self.fc2 = nn.Linear(channels, classes)
-
-#     def forward(self, x):
-#         if x.size(1) == 3:
-#             x = x.mean(1, keepdim=True)
-
-#         x = x.reshape(x.size(0), -1)
-#         x = F.relu(self.fc1(x))
-#         x = self.layers(x)
-#         x = self.fc2(x)
-
-#         return x
-
-
 class MLP(nn.Module):
     def __init__(self, channels=128, layers=3, classes=10):
         super().__init__()
