@@ -201,7 +201,7 @@ class NeuralAlignDiff:
                         if i == 0:
                             back = torch.eye(weights0[i].shape[1])
                         else:
-                            back = new_perm_mats[i - 1].T
+                            back = new_new_new_perm_mats[i - 1].T
                         L = torch.tensordot(weights0[i], new_perm_mat @ weights1[i] @ back, dims=2)
                         
                         if L > oldL[i]:
@@ -221,10 +221,10 @@ class NeuralAlignDiff:
 
                     prevL = newL
 
-                if newL > bestL:
-                    new_perm_mats = copy.deepcopy(new_new_perm_mats)
-                    best_perm_mats = copy.deepcopy(new_perm_mats)
-                    bestL = newL
+                    if newL > bestL:
+                        new_perm_mats = copy.deepcopy(new_new_perm_mats)
+                        best_perm_mats = copy.deepcopy(new_perm_mats)
+                        bestL = newL
 
             print(bestL)
             return [self.permmat_to_perm(best_perm_mats[i].long()) for i in range(len(new_perm_mats))]
