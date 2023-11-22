@@ -195,7 +195,7 @@ class NeuralAlignDiff:
                         if i < len(weights0) - 1:
                             obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1]
                         
-                        obj += weights0[i] @ weights1[i].T
+                        obj += weights0[i] @ weights1[i].T @ new_perm_mats[i].T
                         new_perm_mat = self.perm_to_permmat(self.solve_lap(obj))
 
                         if i == 0:
