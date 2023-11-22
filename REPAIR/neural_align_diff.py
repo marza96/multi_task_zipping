@@ -195,7 +195,6 @@ class NeuralAlignDiff:
                         if i < len(weights0) - 1:
                             obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1]
                         
-                        obj += weights0[i] @ weights1[i].T
                         new_perm_mat = self.perm_to_permmat(self.solve_lap(obj))
 
                         if i == 0:
@@ -216,6 +215,7 @@ class NeuralAlignDiff:
                             back = new_perm_mats[i - 1].T
                         newL += torch.tensordot(weights0[i], new_perm_mats[i] @ weights1[i] @ back , dims=2)
 
+                    print("DBG", newL)
                     if torch.abs(prevL - newL) < 10e-6:
                         break
 
