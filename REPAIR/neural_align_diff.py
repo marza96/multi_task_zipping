@@ -150,6 +150,85 @@ class NeuralAlignDiff:
 
         return self.solve_lap(corr_mtx), corr_mtx
     
+    # # works when loss less than 0.002
+    # def perm_coord_descent(self, net0, net1, epochs=300, device=None):
+    #     with torch.no_grad():
+    #         weights0 = [
+    #             net0.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(self.layer_indices)
+    #         ]
+    #         weights1 = [
+    #             net1.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(self.layer_indices)
+    #         ]
+
+    #         perm_mats = [None for _ in range(len(weights0))]
+
+    #         for i in range(len(weights0)):
+    #             perm_mats[i] = torch.eye(
+    #                 weights0[i].shape[0], 
+    #                 weights0[i].shape[0]
+    #             ).cpu()
+
+    #         bestL = 0.0
+    #         best_perm_mats = copy.deepcopy(perm_mats)
+
+    #         for _ in range(epochs):
+    #             oldL = torch.zeros(len(weights0))
+    #             new_perm_mats = copy.deepcopy(perm_mats)
+
+    #             newL = 0.0
+    #             prevL = 0.0
+    #             for i in range(len(weights0)):
+    #                 if i == 0:
+    #                     back = torch.eye(weights0[i].shape[1])
+    #                 else:
+    #                     back = new_perm_mats[i - 1].T
+    #                 newL += torch.tensordot(weights0[i], new_perm_mats[i] @ weights1[i] @ back, dims=2)
+
+    #             while True:
+    #                 for i in torch.randperm(len(weights0)):
+    #                     obj = torch.zeros(
+    #                         weights0[i].shape[0], 
+    #                         weights0[i].shape[0]
+    #                     )
+    #                     if i > 0:
+    #                         obj = weights0[i] @ new_perm_mats[i - 1] @ weights1[i].T #/ (torch.norm(weights0[i]) * torch.norm(weights1[i]))
+
+    #                     if i < len(weights0) - 1:
+    #                         obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1] #/ (torch.norm(weights0[i + 1]) * torch.norm(weights1[i + 1]))
+                        
+    #                     obj += weights0[i] @ weights1[i].T @ new_perm_mats[i].T #/ (torch.norm(weights0[i]) * torch.norm(weights1[i]))
+    #                     new_perm_mat = self.perm_to_permmat(self.solve_lap(obj))
+
+    #                     if i == 0:
+    #                         back = torch.eye(weights0[i].shape[1])
+    #                     else:
+    #                         back = new_perm_mats[i - 1].T
+    #                     L = torch.tensordot(weights0[i], new_perm_mat @ weights1[i] @ back, dims=2)
+                        
+    #                     if L > oldL[i]:
+    #                         oldL[i] = L
+    #                         new_perm_mats[i] = new_perm_mat
+
+    #                 newL = 0.0
+    #                 for i in range(len(weights0)):
+    #                     if i == 0:
+    #                         back = torch.eye(weights0[i].shape[1])
+    #                     else:
+    #                         back = new_perm_mats[i - 1].T
+    #                     newL += torch.tensordot(weights0[i], new_perm_mats[i] @ weights1[i] @ back , dims=2)
+
+    #                 if torch.abs(prevL - newL) < 10e-6:
+    #                     break
+
+    #                 prevL = newL
+
+    #                 if newL > bestL:
+    #                     best_perm_mats = copy.deepcopy(new_perm_mats)
+    #                     bestL = newL
+
+    #         print(bestL)
+    #         return [self.permmat_to_perm(best_perm_mats[i].long()) for i in range(len(new_perm_mats))]
+
     def perm_coord_descent(self, net0, net1, epochs=300, device=None):
         with torch.no_grad():
             weights0 = [
@@ -167,67 +246,38 @@ class NeuralAlignDiff:
                     weights0[i].shape[0]
                 ).cpu()
 
-            bestL = 0.0
-            best_perm_mats = copy.deepcopy(perm_mats)
+            new_perm_mats = copy.deepcopy(perm_mats)
+
+            for iteration in range(epochs):
+                rperm = torch.randperm(len(weights0))
+                progress = False
+
+                for i in rperm:
+                    obj = torch.zeros(
+                        weights0[i].shape[0], 
+                        weights0[i].shape[0]
+                    )
+ 
+                    if i > 0:
+                        obj = weights0[i] @ new_perm_mats[i - 1] @ weights1[i].T / (torch.norm(weights0[i]) * torch.norm(weights1[i]))
+
+                    if i < len(weights0) - 1:
+                        obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1] / (torch.norm(weights0[i + 1]) * torch.norm(weights1[i + 1]))
+                    
+                    new_perm_mat = self.perm_to_permmat(self.solve_lap(obj))
+
+                    oldL = torch.einsum('ij,ij->i', obj, new_perm_mats[i]).sum()
+                    newL = torch.einsum('ij,ij->i', obj, new_perm_mat).sum()
+                    progress = progress or newL > oldL + 1e-12   
+
+                    new_perm_mats[i] = copy.deepcopy(new_perm_mat)
             
-            for _ in range(epochs):
-                oldL = torch.zeros(len(weights0))
-                new_perm_mats = copy.deepcopy(perm_mats)
+                if not progress:
+                    print("NO", iteration)
+                    break
 
-                newL = 0.0
-                prevL = 0.0
-                for i in range(len(weights0)):
-                    if i == 0:
-                        back = torch.eye(weights0[i].shape[1])
-                    else:
-                        back = new_perm_mats[i - 1].T
-                    newL += torch.tensordot(weights0[i], new_perm_mats[i] @ weights1[i] @ back, dims=2)
-
-                while True:
-                    for i in torch.randperm(len(weights0)):
-                        obj = torch.zeros(
-                            weights0[i].shape[0], 
-                            weights0[i].shape[0]
-                        )
-                        if i > 0:
-                            obj = weights0[i] @ new_perm_mats[i - 1] @ weights1[i].T 
-
-                        if i < len(weights0) - 1:
-                            obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1]
-                        
-                        obj += weights0[i] @ weights1[i].T @ new_perm_mats[i].T
-                        new_perm_mat = self.perm_to_permmat(self.solve_lap(obj))
-
-                        if i == 0:
-                            back = torch.eye(weights0[i].shape[1])
-                        else:
-                            back = new_perm_mats[i - 1].T
-                        L = torch.tensordot(weights0[i], new_perm_mat @ weights1[i] @ back, dims=2)
-                        
-                        if L > oldL[i]:
-                            oldL[i] = L
-                            new_perm_mats[i] = new_perm_mat
-
-                    newL = 0.0
-                    for i in range(len(weights0)):
-                        if i == 0:
-                            back = torch.eye(weights0[i].shape[1])
-                        else:
-                            back = new_perm_mats[i - 1].T
-                        newL += torch.tensordot(weights0[i], new_perm_mats[i] @ weights1[i] @ back , dims=2)
-
-                    if torch.abs(prevL - newL) < 10e-6:
-                        break
-
-                    prevL = newL
-
-                    if newL > bestL:
-                        best_perm_mats = copy.deepcopy(new_perm_mats)
-                        bestL = newL
-
-            print(bestL)
-            return [self.permmat_to_perm(best_perm_mats[i].long()) for i in range(len(new_perm_mats))]
-
+            return [self.permmat_to_perm(new_perm_mats[i].long()) for i in range(len(new_perm_mats))]
+    
     def index_layers(self, model):
         if self.layers_indexed is True:
             return
