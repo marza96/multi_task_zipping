@@ -195,7 +195,6 @@ class NeuralAlignDiff:
                         if i < len(weights0) - 1:
                             obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1]
                         
-                        obj += weights0[i] @ weights1[i].T
                         new_perm_mat = self.perm_to_permmat(self.solve_lap(obj))
 
                         if i == 0:
@@ -245,7 +244,7 @@ class NeuralAlignDiff:
         self.index_layers(model0)
 
         if self.perms_calc is False:
-            self.permutations = self.perm_coord_descent(cl0, cl1, epochs=100, device=device)
+            self.permutations = self.perm_coord_descent(cl0, cl1, epochs=200, device=device)
             self.perms_calc = True
         
         last_perm_map = None
