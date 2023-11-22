@@ -173,7 +173,6 @@ class NeuralAlignDiff:
             for _ in range(epochs):
                 oldL = torch.zeros(len(weights0))
                 new_perm_mats = copy.deepcopy(perm_mats)
-                new_new_perm_mats = copy.deepcopy(perm_mats)
 
                 newL = 0.0
                 prevL = 0.0
@@ -196,17 +195,18 @@ class NeuralAlignDiff:
                         if i < len(weights0) - 1:
                             obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1]
                         
+                        obj += weights0[i] @ weights1[i].T
                         new_perm_mat = self.perm_to_permmat(self.solve_lap(obj))
 
                         if i == 0:
                             back = torch.eye(weights0[i].shape[1])
                         else:
-                            back = new_new_new_perm_mats[i - 1].T
+                            back = new_perm_mats[i - 1].T
                         L = torch.tensordot(weights0[i], new_perm_mat @ weights1[i] @ back, dims=2)
                         
                         if L > oldL[i]:
                             oldL[i] = L
-                            new_new_perm_mats[i] = new_perm_mat
+                            new_perm_mats[i] = new_perm_mat
 
                     newL = 0.0
                     for i in range(len(weights0)):
@@ -214,7 +214,7 @@ class NeuralAlignDiff:
                             back = torch.eye(weights0[i].shape[1])
                         else:
                             back = new_perm_mats[i - 1].T
-                        newL += torch.tensordot(weights0[i], new_new_perm_mats[i] @ weights1[i] @ back , dims=2)
+                        newL += torch.tensordot(weights0[i], new_perm_mats[i] @ weights1[i] @ back , dims=2)
 
                     if torch.abs(prevL - newL) < 10e-6:
                         break
@@ -222,7 +222,6 @@ class NeuralAlignDiff:
                     prevL = newL
 
                     if newL > bestL:
-                        new_perm_mats = copy.deepcopy(new_new_perm_mats)
                         best_perm_mats = copy.deepcopy(new_perm_mats)
                         bestL = newL
 
