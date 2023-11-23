@@ -65,7 +65,7 @@ if __name__ == "__main__":
     vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
 
     model_src = VGG(w=1, cfg=vgg_cfg, classes=10)
-    load_model(model_src, train_cfg.root_path + "/vgg_cifar_split_final.pt")
+    load_model(model_src, train_cfg.root_path + "/pt_models/vgg_cifar_split_final.pt")
 
     train_cfg.models = {
         0: {
