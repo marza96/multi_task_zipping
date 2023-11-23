@@ -293,22 +293,18 @@ class NeuralAlignDiff:
         cl1 = copy.deepcopy(model1.to("cpu")).to(device)
 
         self.index_layers(model0)
-
-        if self.perms_calc is False:
-            self.permutations = self.perm_coord_descent(cl0, cl1, epochs=200, device=device)
-            self.perms_calc = True
         
         last_perm_map = None
         for i, layer_idx in enumerate(self.layer_indices):
-            # if self.perms_calc is False:
-            #     perm_map_, corr_mtx = self.get_layer_perm(
-            #         model0.subnet(cl0, layer_i=layer_idx), 
-            #         model1.subnet(cl1, layer_i=layer_idx), 
-            #         epochs=1, 
-            #         loader=loader, 
-            #         device=device
-            #     )
-            #     self.permutations.append(perm_map_)
+            if self.perms_calc is False:
+                perm_map_, corr_mtx = self.get_layer_perm(
+                    model0.subnet(cl0, layer_i=layer_idx), 
+                    model1.subnet(cl1, layer_i=layer_idx), 
+                    epochs=1, 
+                    loader=loader, 
+                    device=device
+                )
+                self.permutations.append(perm_map_)
 
             perm_map = self.permutations[i]
             weight   = model1.layers[layer_idx].weight

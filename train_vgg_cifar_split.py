@@ -96,7 +96,7 @@ if __name__ == "__main__":
             "optimizer": {
                 "class": SGD,
                 "args": {
-                    "lr": 0.05,
+                    "lr": 0.01,
                     "momentum": 0.9
                 }
             }
