@@ -12,6 +12,7 @@ from REPAIR.train import train_from_cfg
 from REPAIR.net_models.mlp import VGG
 from REPAIR.train_cfg import BaseTrainCfg
 from REPAIR.util import load_model
+from REPAIR.neural_align_diff import NeuralAlignDiff
 
 
 def get_datasets():
@@ -69,8 +70,12 @@ if __name__ == "__main__":
     vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
 
     model_src = VGG(w=1, cfg=vgg_cfg, classes=10)
-    load_model(model_src, train_cfg.root_path + "/pt_models/fuse_vgg_cifar_split.pt")
+    neuralAlign = NeuralAlignDiff(VGG, loader0=loader, loader1=loader, loaderc=loader)
+    neuralAlign.index_layers(model_src)
+    model_src = neuralAlign.wrap_layers_smart(model_src, rescale=True)
 
+    load_model(model_src, train_cfg.root_path + "/pt_models/fuse_vgg_cifar_split.pt")
+    
     train_cfg.models = {
         0: {
             "model": VGG,
