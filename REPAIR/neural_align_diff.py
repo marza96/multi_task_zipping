@@ -288,6 +288,8 @@ class NeuralAlignDiff:
 
         self.layers_indexed = True
 
+        return self.layer_indices
+
     def align_networks_smart(self, model0, model1, loader=None, device=None):
         cl0 = copy.deepcopy(model0.to("cpu")).to(device)
         cl1 = copy.deepcopy(model1.to("cpu")).to(device)
