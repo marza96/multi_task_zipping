@@ -37,7 +37,7 @@ def plot_stuff(x, y, x_label, y_label, legend, path):
     plt.savefig(path)
 
 
-def fuse_from_cfg(train_cfg):
+def fuse_from_cfg(train_cfg, debug=True):
     for i in range(train_cfg.num_experiments):
         model_cls      = train_cfg.models[i]["model"]
         model_args     = train_cfg.models[i]["args"]
@@ -66,6 +66,13 @@ def fuse_from_cfg(train_cfg):
         permute_acc   = list()
         plain_acc     = list()
 
+        modela = neural_align_.fuse_networks(model_args, model0_, model1_, 0.5, device=device, new_stats=True, permute=True).to(device)
+        save_model(modela, root_path + '/pt_models/%s.pt' % exp_name)
+        print("Saved fused model under %s" % (root_path + '/pt_models/%s.pt' % exp_name))
+
+        if debug is False:
+            return
+        
         for i in tqdm.tqdm(range(alpha_split)):
             model0_ = copy.deepcopy(model0)
             model1_ = copy.deepcopy(model1)
