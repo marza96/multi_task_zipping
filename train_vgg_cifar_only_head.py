@@ -38,7 +38,7 @@ def get_datasets():
     return CIFAR10Loader
 
 
-class HeadTrainWrapper:
+class ModelModifier:
     def __init__(self, model_src):
         self.model_src = model_src
 
