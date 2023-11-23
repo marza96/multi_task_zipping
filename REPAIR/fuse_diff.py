@@ -66,9 +66,12 @@ def fuse_from_cfg(train_cfg, debug=True):
         permute_acc   = list()
         plain_acc     = list()
 
-        modela = neural_align_.fuse_networks(model_args, model0_, model1_, 0.5, device=device, new_stats=True, permute=True).to(device)
-        acc = evaluate_acc_single_head(modela, loader=loaderc, device=device)
+        model0_ = copy.deepcopy(model0)
+        model1_ = copy.deepcopy(model1)
+        modela  = neural_align_.fuse_networks(model_args, model0_, model1_, 0.5, device=device, new_stats=True, permute=True).to(device)
+        acc     = evaluate_acc_single_head(modela, loader=loaderc, device=device)
         print("Fused model accuracy: %f", acc)
+
         save_model(modela, root_path + '/pt_models/%s.pt' % exp_name)
         print("Saved fused model under %s" % (root_path + '/pt_models/%s.pt' % exp_name))
 
