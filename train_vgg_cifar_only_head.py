@@ -54,6 +54,10 @@ class ModelModifier:
             if "classifier" in name:
                 param.requires_grad = True
 
+        for m in model_dst.modules():
+            if isinstance(m, torch.nn.BatchNorm2d):
+                m.eval()    
+
         return model_dst
 
 
