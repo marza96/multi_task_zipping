@@ -73,7 +73,7 @@ def fuse_from_cfg(train_cfg):
             modela = neural_align_.fuse_networks(model_args, model0_, model1_, i / 10.0, device=device, new_stats=False, permute=False).to(device)
 
             plain_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
-            if i == 5:
+            if i == alpha_split / 2:
                 print("plain acc: ", plain_acc[-1])
 
         plt.figure()
@@ -95,7 +95,7 @@ def fuse_from_cfg(train_cfg):
 
             permute_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
 
-            if i == 5:
+            if i == alpha_split / 2:
                 print("permute acc: ", permute_acc[-1])
 
         plot_stuff(
@@ -115,7 +115,7 @@ def fuse_from_cfg(train_cfg):
 
             permute_and_rescale_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
 
-            if i == 5:
+            if i == alpha_split / 2:
                 print("permute_and_scale acc: ", permute_and_rescale_acc[-1])
 
         plot_stuff(

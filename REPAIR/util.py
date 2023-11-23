@@ -2,6 +2,15 @@ from typing import Any
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+def save_model(model, i):
+    sd = model.state_dict()
+    torch.save(sd, i)
+
+
+def load_model(model, i):
+    sd = torch.load(i)
+    model.load_state_dict(sd)
+    
 class DatasetSplitter:
     def __init__(self, dataset, indices):
         self.indices = indices
@@ -30,6 +39,7 @@ class ModifyLabels(Dataset):
         label *= 2
         return sample, label
     
+# barrier good for continuing learning  SAM??
 
 class OffsetLabel:
     def __init__(self, offset):

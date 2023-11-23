@@ -1,12 +1,17 @@
+from collections import defaultdict
+
+
 class BaseTrainCfg:
     def __init__(self, *, num_experiments):
         self.num_experiments = num_experiments
 
-        self._models   = None
-        self._cofigs   = None
-        self._loaders  = None
-        self._names    = None
-        self._device   = None
+        self._models     = None
+        self._cofigs     = None
+        self._loaders    = None
+        self._names      = None
+        self._device     = None
+
+        self._def_config_keys = ["model_mod"]
 
     @property
     def models(self):
@@ -22,6 +27,12 @@ class BaseTrainCfg:
     def models(self):
         del self._models
 
+    def default_config_key(self, key):
+        if key in self._def_config_keys:
+            return None
+        
+        raise KeyError(key)
+
     @property
     def configs(self):
         return self._configs
@@ -30,7 +41,10 @@ class BaseTrainCfg:
     def configs(self, new_configs):
         assert len(new_configs.keys()) == self.num_experiments
 
-        self._configs = new_configs
+        self._configs = {
+            k: defaultdict(lambda: None, new_configs[k])
+            for k in new_configs.keys()
+        }
 
     @configs.deleter
     def configs(self):
