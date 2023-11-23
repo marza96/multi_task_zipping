@@ -44,6 +44,10 @@ class ModelModifier:
         self.model_src = model_src
 
     def __call__(self, model_dst):
+        neuralAlign = NeuralAlignDiff(VGG)
+        neuralAlign.index_layers(model_dst)
+        model_dst = neuralAlign.wrap_layers_smart(model_dst, rescale=True)
+
         model_dst.load_state_dict(
             self.model_src.state_dict()
         )
