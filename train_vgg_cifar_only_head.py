@@ -55,7 +55,7 @@ class ModelModifier:
                 param.requires_grad = True
 
         for m in model_dst.modules():
-            if isinstance(m, torch.nn.BatchNorm2d):
+            if isinstance(m, torch.nn.BatchNorm2d) or isinstance(m, torch.nn.BatchNorm1d):
                 m.eval()    
 
         return model_dst
