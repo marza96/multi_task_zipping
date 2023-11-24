@@ -10,6 +10,8 @@ from torch.utils.data import ConcatDataset
 from REPAIR.fuse_diff import fuse_from_cfg
 from REPAIR.net_models.mlp import MLP, CNN
 from REPAIR.fuse_cfg import BaseFuseCfg
+from REPAIR.matching.weight_matching import WeightMatching
+from REPAIR.matching.activation_matching import ActivationMatching
 
 
 def get_datasets():
@@ -77,6 +79,7 @@ if __name__ == "__main__":
     fuse_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
+            "match_method": WeightMatching(),
             "device": "cuda",
         },
     }

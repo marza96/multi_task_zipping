@@ -8,7 +8,7 @@ from collections import namedtuple, defaultdict
 from typing import NamedTuple
 
 from .net_models.mlp import LayerWrapper, LayerWrapper2D, CNN
-from .matching.weight_matching import weight_matching, WeightMatching
+from .matching.weight_matching import WeightMatching
 from .matching.activation_matching import activation_matching
 import numpy as np
 import torch.nn as nn

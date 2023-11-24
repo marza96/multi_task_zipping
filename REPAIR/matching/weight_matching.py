@@ -76,7 +76,7 @@ class WeightMatching():
                     rperm = torch.Tensor([4, 1, 3, 2, 0]).long()
                 
                 for i in rperm:
-                    obj  = objective(i, perm_mats, weights0, weights1, biases0, biases1, l_types)
+                    obj  = self.objective(i, perm_mats, weights0, weights1, biases0, biases1, l_types)
                     perm = solve_lap(obj)
                     oldL = torch.einsum(
                         'ij,ij->i', 
