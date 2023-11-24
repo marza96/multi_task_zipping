@@ -40,13 +40,15 @@ def get_datasets():
 
 
 class ModelModifier:
-    def __init__(self, model_src):
+    def __init__(self, model_src, repair=False):
         self.model_src = model_src
+        self.repair    = repair
 
     def __call__(self, model_dst):
-        neuralAlign = NeuralAlignDiff(VGG)
-        neuralAlign.index_layers(model_dst)
-        model_dst = neuralAlign.wrap_layers_smart(model_dst, rescale=True)
+        if self.repair is True:
+            neuralAlign = NeuralAlignDiff(VGG, None, None, None)
+            neuralAlign.index_layers(model_dst)
+            model_dst = neuralAlign.wrap_layers_smart(model_dst, rescale=True)
 
         model_dst.load_state_dict(
             self.model_src.state_dict()
@@ -56,14 +58,14 @@ class ModelModifier:
             param.requires_grad = False
 
         for name, param in model_dst.named_parameters():
-            if "classifier" in name:
+            if "classifier" or "layers.10" in name:
                 param.requires_grad = True
 
         for m in model_dst.modules():
             if isinstance(m, torch.nn.BatchNorm2d) or isinstance(m, torch.nn.BatchNorm1d):
                 m.eval()    
 
-        return model_dst
+        return model_dst.to("cuda")
 
 
 if __name__ == "__main__":
@@ -72,13 +74,15 @@ if __name__ == "__main__":
     train_cfg = BaseTrainCfg(num_experiments=1)
     train_cfg.root_path = os.path.dirname(__file__)
     vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
-
+    repair_flag = True
     model_src = VGG(w=1, cfg=vgg_cfg, classes=10)
-    neuralAlign = NeuralAlignDiff(VGG, loader0=loader, loader1=loader, loaderc=loader)
-    neuralAlign.index_layers(model_src)
-    model_src = neuralAlign.wrap_layers_smart(model_src, rescale=True)
 
-    load_model(model_src, train_cfg.root_path + "/pt_models/fuse_vgg_cifar_split.pt")
+    if repair_flag is True:
+        neuralAlign = NeuralAlignDiff(VGG, loader0=loader, loader1=loader, loaderc=loader)
+        neuralAlign.index_layers(model_src)
+        model_src = neuralAlign.wrap_layers_smart(model_src, rescale=True)
+
+    load_model(model_src, train_cfg.root_path + "/pt_models/fuse_vgg_cifar_split_perm.pt", repair=repair_flag)
     
     train_cfg.models = {
         0: {
@@ -93,14 +97,14 @@ if __name__ == "__main__":
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 40,
+            "epochs" : 5,
             "device": "cuda",
-            "mod": ModelModifier(model_src),
+            "model_mod": ModelModifier(model_src, repair=repair_flag),
             "optimizer": {
                 "class": SGD,
                 "args": {
-                    "lr": 0.05,
-                    "momentum": 0.9
+                    "lr": 0.01,
+                    "momentum": 0.1
                 }
             }
         }

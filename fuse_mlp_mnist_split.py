@@ -77,7 +77,7 @@ if __name__ == "__main__":
     fuse_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "device": "cuda",
+            "device": "mps",
         },
     }
     fuse_cfg.loaders = {
