@@ -8,11 +8,15 @@ from collections import namedtuple, defaultdict
 from typing import NamedTuple
 
 from .net_models.mlp import LayerWrapper, LayerWrapper2D, CNN
-
+from .matching.weight_matching import weight_matching, WeightMatching
+from .matching.activation_matching import activation_matching
 import numpy as np
 import torch.nn as nn
 
 import matplotlib.pyplot as plt
+
+torch.set_printoptions(precision=2, sci_mode=False)
+
 
 class STEFunction(torch.autograd.Function):
     @staticmethod
@@ -66,7 +70,7 @@ def apply_permutation(ps: PermutationSpec, perm, params):
     return ret
 
 
-def weight_matching(ps: PermutationSpec, params_a, params_b, max_iter=300, init_perm=None, print_flg=True):
+def weight_matching_ref(ps: PermutationSpec, params_a, params_b, max_iter=300, init_perm=None, print_flg=True):
     """Find a permutation of `params_b` to make them match `params_a`."""
     perm_sizes = {p: params_a[axes[0][0]].shape[axes[0][1]] for p, axes in ps.perm_to_axes.items()}
     device = list(params_a.values())[0].device
@@ -77,20 +81,23 @@ def weight_matching(ps: PermutationSpec, params_a, params_b, max_iter=300, init_
     perm_names = list(perm.keys())
     metrics = {'step': [], 'l2_dist': []}
     step = 0
-    for iteration in range(max_iter): 
+    for iteration in range(2): 
         progress = False
-        for p_ix in torch.randperm(len(perm_names)):
+        perm_tens = torch.Tensor([4, 1, 3, 2, 0]).long()
+        for p_ix in perm_tens:
             p = perm_names[p_ix]
             n = perm_sizes[p]
-            A = torch.zeros((n, n)) 
+            A = torch.zeros((n, n))
             for wk, axis in ps.perm_to_axes[p]:  # layer loop
                 if ('running_mean' not in wk) and ('running_var' not in wk) and ('num_batches_tracked' not in wk):
                     w_a = params_a[wk]  # target
                     w_b = get_permuted_param(ps, perm, wk, params_b, except_axis=axis) 
                     w_a = torch.moveaxis(w_a, axis, 0).reshape((n, -1))
                     w_b = torch.moveaxis(w_b, axis, 0).reshape((n, -1))
-
                     A += w_a @ w_b.T  # A is cost matrix to assignment,
+                    # print(torch.sum(w_a @ w_b.T))
+
+            # print("..............")
             ri, ci = scipy.optimize.linear_sum_assignment(A.detach().numpy(), maximize=True)
             assert (torch.tensor(ri) == torch.arange(len(ri))).all()
             oldL = torch.einsum('ij,ij->i', A, torch.eye(n)[perm[p].long()]).sum()
@@ -159,7 +166,81 @@ def mlp_permutation_spec(num_hidden_layers: int, bias_flg: bool) -> PermutationS
     
 
 class NeuralAlignDiff:
-    def __init__(self, model_cls, loader0, loader1, loaderc) -> None:
+    def perm_coord_descent(self, net0, net1, epochs=1, device=None):
+        with torch.no_grad():
+            weights0 = [
+                net0.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(self.layer_indices)
+            ]
+            weights1 = [
+                net1.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(self.layer_indices)
+            ]
+
+            biases0 = [
+                net0.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(self.layer_indices)
+            ]
+            biases1 = [
+                net1.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(self.layer_indices)
+            ]
+
+            perm_mats = [None for _ in range(len(weights0))]
+
+            for i in range(len(weights0)):
+                perm_mats[i] = torch.eye(
+                    weights0[i].shape[0]
+                ).cpu()
+
+            new_perm_mats = copy.deepcopy(perm_mats)
+
+            print(len(new_perm_mats))
+            for iteration in range(2):
+                rperm = torch.Tensor([4, 1, 3, 2, 0]).long()
+                progress = False
+
+                for i in rperm:
+                    obj = torch.zeros(
+                        (
+                            weights0[i].shape[0], 
+                            weights0[i].shape[0]
+                        )
+                    )
+
+                    if i > 0:
+                        obj += weights0[i] @ new_perm_mats[i - 1] @ weights1[i].T 
+
+                        # print(torch.sum(weights0[i] @ new_perm_mats[i - 1] @ weights1[i].T))
+
+                    if i == 0:
+                        obj += weights0[i] @  weights1[i].T 
+
+                        # print(torch.sum(weights0[i] @ weights1[i].T))
+
+                    obj += torch.outer(biases0[i], biases1[i])
+                    # print(torch.sum(torch.outer(biases0[i], biases1[i])))
+
+                    if i < len(weights0) - 1:
+                        obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1]
+                    
+                        # print(torch.sum(weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1]))
+
+                    # print("................")
+                     
+                
+                    ri, ci = scipy.optimize.linear_sum_assignment(obj.detach().numpy(), maximize=True)
+                    assert (torch.tensor(ri) == torch.arange(len(ri))).all()
+                    oldL = torch.einsum('ij,ij->i', obj, torch.eye(weights0[i].shape[0])[self.permmat_to_perm(new_perm_mats[i]).long(), :]).sum()
+                    newL = torch.einsum('ij,ij->i', obj, torch.eye(weights0[i].shape[0])[ci, :]).sum()
+                    print(f"{iteration}/{i}: {newL - oldL}") 
+                    progress = progress or newL > oldL + 1e-12
+                
+                    new_perm_mats[i] = copy.deepcopy(self.perm_to_permmat(ci))
+            
+                if not progress:
+                    print("NO", iteration)
+                    break
+
+            return [self.permmat_to_perm(new_perm_mats[i].long()) for i in range(len(new_perm_mats))]
+
+    def __init__(self, model_cls, match_method, loader0, loader1, loaderc) -> None:
         self.permutations   = list()
         self.statistics     = list()
         self.layer_indices  = list()
@@ -167,10 +248,11 @@ class NeuralAlignDiff:
         self.stats_calc     = False
         self.layers_indexed = False
 
-        self.loader0   = loader0
-        self.loader1   = loader1
-        self.loaderc   = loaderc
-        self.model_cls = model_cls
+        self.loader0         = loader0
+        self.loader1         = loader1
+        self.loaderc         = loaderc
+        self.model_cls       = model_cls
+        self.match_method = match_method
 
         self.dbg0 = None
 
@@ -276,62 +358,6 @@ class NeuralAlignDiff:
         )
 
         return self.solve_lap(corr_mtx), corr_mtx
-    
-    def perm_coord_descent(self, net0, net1, epochs=300, device=None):
-        with torch.no_grad():
-            weights0 = [
-                net0.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(self.layer_indices)
-            ]
-            weights1 = [
-                net1.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(self.layer_indices)
-            ]
-
-            perm_mats = [None for _ in range(len(weights0))]
-
-            for i in range(len(weights0)):
-                perm_mats[i] = torch.eye(
-                    weights0[i].shape[0], 
-                    weights0[i].shape[0]
-                ).cpu()
-
-            new_perm_mats = copy.deepcopy(perm_mats)
-
-            for iteration in range(500):
-                rperm = torch.randperm(len(weights0))
-                progress = False
-
-                for i in rperm:
-                    obj = torch.zeros(
-                        weights0[i].shape[0], 
-                        weights0[i].shape[0]
-                    )
-
-                    # if i > 0:
-                    #     obj = weights0[i] @ new_perm_mats[i - 1] @ weights1[i].T / (torch.norm(weights0[i]) * torch.norm(weights1[i]))
-
-                    # if i < len(weights0) - 1:
-                    #     obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1] / (torch.norm(weights0[i + 1]) * torch.norm(weights1[i + 1]))
-                    
-                    # for j in rperm:
-                    j=i
-                    if j == 0:
-                        obj += weights0[j] @ (new_perm_mats[j] @ weights1[j]).T
-                    if j > 0:
-                        obj += weights0[j] @ (new_perm_mats[j] @ weights1[j] @ new_perm_mats[j - 1].T).T
-                
-                    ri, ci = scipy.optimize.linear_sum_assignment(obj.detach().numpy(), maximize=True)
-                    assert (torch.tensor(ri) == torch.arange(len(ri))).all()
-                    oldL = torch.einsum('ij,ij->i', obj, new_perm_mats[i]).sum()
-                    newL = torch.einsum('ij,ij->i', obj, self.perm_to_permmat(ci)).sum()
-                    progress = progress or newL > oldL + 1e-12
-
-                    new_perm_mats[i] = copy.deepcopy(self.perm_to_permmat(ci))
-            
-                if not progress:
-                    print("NO", iteration)
-                    break
-
-            return [self.permmat_to_perm(new_perm_mats[i].long()) for i in range(len(new_perm_mats))]
 
     def index_layers(self, model):
         if self.layers_indexed is True:
@@ -363,10 +389,12 @@ class NeuralAlignDiff:
             dct1.pop("classifier.bias")
 
             ps = mlp_permutation_spec(5, True)
-            self.permutations, _ = weight_matching(ps, dct0, dct1)
+            weight_matching_ref(ps, dct0, dct1)
+            print("....................")
+            WeightMatching(debug=True)(self.layer_indices, cl0, cl1)
 
-            self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
-            print(self.permutations[0].shape, len(self.layer_indices))
+        #     self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
+        #     print(self.permutations[0].shape, len(self.layer_indices))
         
         last_perm_map = None
         for i, layer_idx in enumerate(self.layer_indices):
