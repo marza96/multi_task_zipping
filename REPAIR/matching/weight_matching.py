@@ -1,14 +1,13 @@
 import torch
-import scipy
-import tqdm
 import copy
 
 from .utils import perm_to_permmat, permmat_to_perm, solve_lap
 
 
 class WeightMatching():
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, epochs=1):
         self.debug = debug
+        self.epochs = epochs
 
     def objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
         obj = torch.zeros(
@@ -43,16 +42,16 @@ class WeightMatching():
 
         return obj
 
-    def __call__(self, layer_indices, net0, net1, epochs=2):
+    def __call__(self, layer_indices, net0, net1):
         with torch.no_grad():
             weights0 = [
-                net0.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(layer_indices)
+                net0.layers[layer_i].layer_hat.weight.clone().cpu() for i, layer_i in enumerate(layer_indices)
             ]
             weights1 = [
                 net1.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(layer_indices)
             ]
             biases0 = [
-                net0.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(layer_indices)
+                net0.layers[layer_i].layer_hat.bias.clone().cpu() for i, layer_i in enumerate(layer_indices)
             ]
             biases1 = [
                 net1.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(layer_indices)
@@ -68,7 +67,7 @@ class WeightMatching():
                     weights0[i].shape[0]
                 ).cpu()
 
-            for iteration in range(epochs):
+            for iteration in range(self.epochs):
                 progress = False
                 rperm = torch.randperm(len(weights0))
 

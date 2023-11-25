@@ -32,7 +32,7 @@ class MLP(nn.Module):
         x = x.reshape(x.size(0), -1)
         x = self.layers(x)
         x = self.classifier(x)
-
+ 
         return x
     
 
