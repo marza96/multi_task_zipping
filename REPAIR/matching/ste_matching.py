@@ -9,25 +9,35 @@ from torch.optim import SGD
 
 from .weight_matching import WeightMatching
 
+from torch.nn.utils.stateless import functional_call
+
+from torchviz import make_dot
+
 
 class LinearSTEFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input, p_in, p_out, w_0, b_0, w_1, b_1, w_hat):
-        ctx.save_for_backward(w_0, w_hat)
+    def forward(ctx, input, p_in, p_out, w_0, b_0, w_1, b_1, w_hat, b_hat, w_hat_d, idx):
+        ctx.save_for_backward(input, w_0, w_hat_d, idx)
 
         w_1  = w_1[p_out, :]
         w_1  = w_1[:, p_in]
 
-        a    = F.linear(input.float(), w_0, b_0)
-        b_pi = F.linear(input.float(), w_1 , b_1[p_out])
+        a    = F.linear(input, 0.5 * w_0, 0.5 * b_0)
+        b_pi = F.linear(input, 0.5 * w_1 , 0.5 * b_1[p_out])
 
-        return 0.5 * (a + b_pi)
+        return (a + b_pi).detach()
 
     @staticmethod
     def backward(ctx, grad_output):
-        w_0, w_hat, = ctx.saved_tensors
+        input, w_0, w_hat, idx = ctx.saved_tensors
 
-        return grad_output @ (0.5 * (w_0 + w_hat)), None, None, None, None, None, None, None
+        # print("input_grad:", idx, " ", grad_output[0, :19])
+
+        grad_input  = grad_output.mm(0.5 * (w_0 + w_hat))
+        grad_weight = grad_output.t().mm(input) 
+        grad_bias   = grad_output.sum(0)
+
+        return grad_input, None, None, None, None, None, None, grad_weight, grad_bias, None, None
     
 
 class LinearStraightThroughEstimator(torch.nn.Module):
@@ -36,9 +46,19 @@ class LinearStraightThroughEstimator(torch.nn.Module):
         
         self.perms     = None
         self.idx       = idx
-        self.layer_0   = layer_0.to(device)
-        self.layer_1   = layer_1.to(device)
-        self.layer_hat = copy.deepcopy(layer_0).to(device)
+
+        self.w_hat = layer_0.weight.clone()
+
+        self.w_0 = layer_0.weight.clone()
+        self.w_1 = layer_1.weight.clone()
+        self.b_0 = layer_0.bias.clone()
+        self.b_1 = layer_1.bias.clone()
+
+        self.weight = torch.nn.Parameter(layer_0.weight.clone())
+        self.bias = torch.nn.Parameter(layer_0.bias.clone())
+
+        self.weight.requires_grad = True
+        self.bias.requires_grad = True
 
     def set_perms(self, perms):
         self.perms = perms
@@ -47,7 +67,7 @@ class LinearStraightThroughEstimator(torch.nn.Module):
         p_in  = None
         p_out = None
 
-        x= input
+        x = input
 
         if self.idx == 0:
             p_in = torch.arange(x.shape[1]).long()
@@ -56,22 +76,25 @@ class LinearStraightThroughEstimator(torch.nn.Module):
             p_in = self.perms[self.idx - 1]
             p_in.to(x.device)
 
-        if self.idx < len(self.perms) - 1:
+        if self.idx < len(self.perms):
             p_out = self.perms[self.idx]
             p_out.to(x.device)
         else:
-            p_out = torch.arange(self.layer_hat.weight.shape[0])
+            p_out = torch.arange(self.weight.shape[0])
             p_out.to(x.device)
         
         x = LinearSTEFunction.apply(
             x, 
             p_in.to(x.device), 
             p_out.to(x.device),
-            self.layer_0.weight,
-            self.layer_0.bias,
-            self.layer_1.weight,
-            self.layer_1.bias,
-            self.layer_hat.weight
+            self.w_0,
+            self.b_0,
+            self.w_1,
+            self.b_1,
+            self.weight,
+            self.bias,
+            self.w_hat,
+            torch.Tensor([self.idx, ])
         )
 
         return x
@@ -94,10 +117,16 @@ class SteMatching:
         self.net1 = None
         self.netm = None
 
-    def __call__(self, layer_indices, net0, net1):
+    def __call__(self, layer_indices, net0, net1, debug_perms=None):
         if self.net0 is None and self.net1 is None:
             self.net0 = net0
             self.net1 = net1
+
+            for name, param in self.net0.named_parameters():
+                param.requires_grad = False
+            for name, param in self.net1.named_parameters():
+                param.requires_grad = False
+
             self.netm = self._wrap_network(
                 layer_indices, 
                 net0, 
@@ -108,73 +137,104 @@ class SteMatching:
             self.net1.to(self.device)
             self.netm.to(self.device)
 
-            for param in self.net0.parameters():
-                param.requires_grad = False
-            for param in self.net1.parameters():
-                param.requires_grad = False
+            for name, param in self.netm.named_parameters():
+                if "hat" in name:
+                    param.requires_grad = True
 
-        self.netm.train()
-
-        optimizer = SGD(self.netm.parameters(), lr=0.1, momentum=0.9)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.75)
+        # optimizer = SGD(self.netm.parameters(), lr=0.05, momentum=0.9)
+        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.75)
 
         best_perm_loss = 1000.0
         best_perm = None
+        perms = None
 
-        for iteration in range(self.epochs):
-            loss_acum = 0.0
-            total = 0
+        loss_fn = torch.nn.NLLLoss()
+        with torch.autograd.enable_grad():
+            for iteration in range(self.epochs):
+                loss_acum = 0.0
+                total = 0
 
-            perms = self.weight_matching(layer_indices, self.netm, self.net1, ste=True)
+                perms = self.weight_matching(layer_indices, self.netm, self.net1, init_perm=perms)
 
-            for i, (images, labels) in enumerate(tqdm.tqdm(self.loader)):
+                for i, (images, labels) in enumerate(tqdm.tqdm(self.loader)):
+                    # optimizer.zero_grad()
+                    images = images.to(self.device)
+                    labels = labels.to(self.device)
 
-                optimizer.zero_grad(set_to_none=True)
+                    self.netm.zero_grad()
 
-                # perms = self.weight_matching(layer_indices, self.netm, self.net1, ste=True)
+                    for i, layer_idx in enumerate(layer_indices):
+                        self.netm.layers[layer_idx].set_perms(copy.deepcopy(perms))
 
-                for i, layer_idx in enumerate(layer_indices):
-                    self.netm.layers[layer_idx].set_perms(perms)
+                    outputs = self.netm(images)
 
-                outputs = self.netm(images.to(self.device))
-                # loss    = self.loss_fn(outputs, labels.to(self.device))
+                    print("OUT MY", outputs[0, :11])
+                
+                    loss = loss_fn(outputs, labels)
+                    loss.backward()
 
-                loss    = torch.nn.functional.nll_loss(outputs, labels.to(self.device))
+                    # print("MY LOSS", loss.item())
+                    # print("MY LOSS GRAD", loss.grad)
 
-                loss.backward()
-                optimizer.step()
+                    # make_dot(outputs, params=dict(list(self.netm.named_parameters()))).render("rnn_torchviz", format="png")
 
-                # if loss.mean() < best_perm_loss:
-                #     best_perm_loss = loss.mean()
-                #     best_perm = copy.deepcopy([perm.cpu() for perm in perms])
-                #     # print("BEST: ", best_perm_loss)
+                
+                    # for perm in perms:
+                    #     print(perm[:11])
+                        
+                    print("---------------")
+                    for name, param in self.netm.named_parameters():
+                        if param.requires_grad is False:
+                            continue
+                        
+                        print("PARAM", name)
+                        try:
+                            print(name, param.grad[:5, :5])
+                        except:
+                            print(name, param.grad[:5])
+                    print("......................................")
+                    return
+                    
+                    # optimizer.step()
 
-                loss_acum += loss.mean()
-                total += 1
+                    # if loss.mean() < best_perm_loss:
+                    #     best_perm_loss = loss.mean()
+                    #     best_perm = copy.deepcopy([perm.cpu() for perm in perms])
+                    #     # print("BEST: ", best_perm_loss)
 
-            # scheduler.step()
+                    loss_acum += loss.mean()
+                    total += 1
 
-            total_loss = loss_acum / total
-            if total_loss < best_perm_loss:
-                best_perm_loss = total_loss
-                best_perm = copy.deepcopy([perm.cpu() for perm in perms])
-                print("BEST: ", best_perm_loss)
+                # scheduler.step()
 
-            print("LOSS: %d" % iteration, loss_acum / total)
-            for perm in best_perm:
-                print(perm[:11])
-        
-        return best_perm
+                total_loss = loss_acum / total
+                if total_loss < best_perm_loss:
+                    best_perm_loss = total_loss
+                    best_perm = copy.deepcopy([perm.cpu() for perm in perms])
+                    print("BEST: ", best_perm_loss)
 
+                print("LOSS: %d" % iteration, loss_acum / total)
+                for perm in best_perm:
+                    print(perm[:11])
+            
+            return best_perm
+    
     def _wrap_network(self, layer_indices, net0, net1):
         wrapped_model = copy.deepcopy(net1)
 
+        layers = list()
         for i, layer_idx in enumerate(layer_indices):
             layer0 = net0.layers[layer_idx]
             layer1 = net1.layers[layer_idx]
-
             wrapper = LinearStraightThroughEstimator
 
-            wrapped_model.layers[layer_idx] = wrapper(layer0, layer1, i)
+            layers.extend(
+                [
+                    wrapper(layer0, layer1, i), 
+                    torch.nn.ReLU()
+                ]
+            )
+
+        wrapped_model.layers = torch.nn.Sequential(*layers)
 
         return wrapped_model

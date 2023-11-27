@@ -43,7 +43,7 @@ class WeightMatching():
         
         return obj
 
-    def __call__(self, layer_indices, net0, net1, ste=False):
+    def __call__(self, layer_indices, net0, net1, ste=False, init_perm=None):
         with torch.no_grad():
 
             if ste is True:
@@ -85,6 +85,10 @@ class WeightMatching():
                 perm_mats[i] = torch.eye(
                     weights0[i].shape[0]
                 ).cpu()
+
+            if init_perm is not None:
+                for i in range(len(weights0) - 1):
+                    perm_mats[i] = perm_to_permmat(init_perm[i])
 
             for iteration in range(self.epochs):
                 progress = False

@@ -41,20 +41,20 @@ def get_datasets():
 
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, first_half),
-        batch_size=128,
-        shuffle=True,
+        batch_size=512,
+        shuffle=False,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=128,
-        shuffle=True,
+        batch_size=512,
+        shuffle=False,
         num_workers=8)
     
     ConcatLoader = torch.utils.data.DataLoader(
         ConcatDataset((torch.utils.data.Subset(mnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
-        batch_size=128,
-        shuffle=True, 
+        batch_size=512,
+        shuffle=False, 
         num_workers=8
     )
     
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         0: {
             "loss_fn": CrossEntropyLoss(),
             "match_method": WeightMatching(),
-            "device": "cuda"
+            "device": "mps"
         },
     }
     fuse_cfg.loaders = {

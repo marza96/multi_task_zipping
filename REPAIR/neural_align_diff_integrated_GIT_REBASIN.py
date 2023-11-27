@@ -15,6 +15,8 @@ import numpy as np
 import torch.nn as nn
 
 import matplotlib.pyplot as plt
+from torchviz import make_dot
+
 
 torch.set_printoptions(precision=5, sci_mode=False)
 
@@ -40,7 +42,7 @@ def clone(x):
         ret[key] = x[key].clone().detach()
     return ret
 
-def wm_learning(model_a, model_b, train_loader, permutation_spec):
+def wm_learning(model_a, model_b, train_loader, permutation_spec, dbg_perm=None):
     from torch.nn.utils.stateless import functional_call
     import torchopt
 
@@ -54,14 +56,14 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec):
     train_state = model_a.state_dict()
     model_target = copy.deepcopy(model_a)
 
-    optimizer = torchopt.sgd(lr=0.5, momentum=0.9, moment_requires_grad=True)
+    optimizer = torchopt.sgd(lr=0.05, momentum=0.9, moment_requires_grad=True)
 
     for key in train_state:
         train_state[key] = train_state[key].float()
 
     opt_state = optimizer.init(train_state)
 
-    for epoch in tqdm(range(0, 10)):
+    for epoch in tqdm(range(0, 20)):
         correct = 0.
         loss_acum = 0.0
         total = 0
@@ -73,8 +75,10 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec):
             # projection by weight matching
             perm, _ = weight_matching_ref(permutation_spec,
                                         train_state, flatten_params(model_b),
-                                        max_iter=100, init_perm=perm, print_flg=False)
+                                        max_iter=100, print_flg=False, debug_perms=dbg_perm)
 
+            for p in perm:
+                print(perm[p][:11])
             projected_params = apply_permutation(permutation_spec, perm, flatten_params(model_b))
 
 
@@ -85,20 +89,36 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec):
                 train_state[key].grad = None  # optimizer.zero_grad()
 
 
-
             # straight-through-estimator https://github.com/samuela/git-re-basin/blob/main/src/mnist_mlp_ste2.py#L178
             ste_params = {}
             for key in projected_params:
-                ste_params[key] = projected_params[key].detach() + (
-                            train_state[key] - train_state[key].detach())
+                ste_params[key] = projected_params[key].detach() + (train_state[key] - train_state[key].detach())
 
             midpoint_params = lerp(0.5, freeze(flatten_params(model_a)), ste_params)
-
+            
             model_target.train()
 
+
             output = functional_call(model_target, midpoint_params, x)
+            print("OUT LEG", output[0, :11])
+            # return
+
+            make_dot(output, params=dict(list(model_target.named_parameters()))).render("leg_tv", format="png")
+            
+
             loss = torch.nn.functional.nll_loss(output, t)
+            print("LEG LOSS", loss.item())
+            
             loss.backward()
+
+            for key in train_state:
+                try:
+                    print(key, train_state[key].grad[:5, :5])
+                except:
+                    print(key, train_state[key].grad[:5])
+
+            print("......................................")
+            return
 
             # optimize
             grads = OrderedDict()
@@ -511,12 +531,12 @@ class NeuralAlignDiff:
             dct0 = copy.deepcopy(cl0.cpu().state_dict())
             dct1 = copy.deepcopy(cl1.cpu().state_dict())
 
-            # torch.manual_seed(0)
+            torch.manual_seed(0)
+            iterations = 100
+            global_perms = [
+                torch.randperm(len(self.layer_indices) - 1) for _ in range(iterations)
+            ]
 
-            # iterations = 100
-            # global_perms = [
-            #     torch.randperm(len(self.layer_indices) - 1) for _ in range(iterations)
-            # ]
             # ps = mlp_permutation_spec(5, True)
             # self.permutations, _ = weight_matching_ref(ps, dct0, dct1, max_iter=iterations, debug_perms=global_perms, legacy=False)
             # for perm in self.permutations:
@@ -528,28 +548,28 @@ class NeuralAlignDiff:
             # self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
 
 
-
-            ps = mlp_permutation_spec(5, True)
-            cl0 = cl0.to("mps")
-            cl1 = cl1.to("mps")
-            self.permutations = wm_learning(cl0, cl1, self.loaderc, ps)
-            self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
-
-
-
-            # ste_matchin = SteMatching(
-            #     torch.nn.CrossEntropyLoss(),
-            #     self.loaderc,
-            #     0.1,
-            #     epochs=10,
-            #     device="mps",
-            #     wm_kwargs={
-            #         "epochs": 100,
-            #         "debug": False
-            #     }
-            # )
-            # self.permutations = ste_matchin(self.layer_indices, cl0, cl1)
+            # ps = mlp_permutation_spec(5, True)
+            # cl0 = cl0.to("mps")
+            # cl1 = cl1.to("mps")
+            # self.permutations = wm_learning(cl0, cl1, self.loaderc, ps, dbg_perm=global_perms)
             # self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
+
+            cl0 = copy.deepcopy(model0.to("cpu")).to(device)
+            cl1 = copy.deepcopy(model1.to("cpu")).to(device)
+            ste_matchin = SteMatching(
+                torch.nn.CrossEntropyLoss(),
+                self.loaderc,
+                0.1,
+                epochs=10,
+                device="mps",
+                wm_kwargs={
+                    "epochs": 100,
+                    "debug": False,
+                    "debug_perms": global_perms
+                }
+            )
+            self.permutations = ste_matchin(self.layer_indices, cl0, cl1)
+            self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
 
 
         model0 = model0.to("mps")
