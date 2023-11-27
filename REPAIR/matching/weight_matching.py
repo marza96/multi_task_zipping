@@ -5,9 +5,10 @@ from .utils import perm_to_permmat, permmat_to_perm, solve_lap
 
 
 class WeightMatching():
-    def __init__(self, debug=False, epochs=1):
+    def __init__(self, debug=False, epochs=1, debug_perms=None):
         self.debug = debug
         self.epochs = epochs
+        self.debug_perms = debug_perms
 
     def objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
         obj = torch.zeros(
@@ -39,26 +40,44 @@ class WeightMatching():
                 w1_ii = w1_ii.permute(2, 3, 0, 1)
 
             obj += w0_ii.T @ perm_mats[idx + 1] @ w1_ii
-
+        
         return obj
 
-    def __call__(self, layer_indices, net0, net1):
+    def __call__(self, layer_indices, net0, net1, ste=False):
         with torch.no_grad():
-            weights0 = [
-                net0.layers[layer_i].layer_hat.weight.clone().cpu() for i, layer_i in enumerate(layer_indices)
-            ]
-            weights1 = [
-                net1.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(layer_indices)
-            ]
-            biases0 = [
-                net0.layers[layer_i].layer_hat.bias.clone().cpu() for i, layer_i in enumerate(layer_indices)
-            ]
-            biases1 = [
-                net1.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(layer_indices)
-            ]
-            l_types = [
-                type(net1.layers[layer_i]) for i, layer_i in enumerate(layer_indices)
-            ]
+
+            if ste is True:
+                weights0 = [
+                    net0.layers[layer_i].layer_hat.weight.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
+                weights1 = [
+                    net1.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
+                biases0 = [
+                    net0.layers[layer_i].layer_hat.bias.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
+                biases1 = [
+                    net1.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
+                l_types = [
+                    type(net1.layers[layer_i]) for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
+            else:
+                weights0 = [
+                    net0.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
+                weights1 = [
+                    net1.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
+                biases0 = [
+                    net0.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
+                biases1 = [
+                    net1.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
+                l_types = [
+                    type(net1.layers[layer_i]) for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                ]
 
             perm_mats = [None for _ in range(len(weights0))]
 
@@ -69,11 +88,11 @@ class WeightMatching():
 
             for iteration in range(self.epochs):
                 progress = False
-                rperm = torch.randperm(len(weights0))
+                rperm = torch.randperm(len(layer_indices) - 1)
 
-                if self.debug is True:
-                    rperm = torch.Tensor([4, 1, 3, 2, 0]).long()
-                
+                if self.debug_perms is not None:
+                    rperm = self.debug_perms[iteration]
+
                 for i in rperm:
                     obj  = self.objective(i, perm_mats, weights0, weights1, biases0, biases1, l_types)
                     perm = solve_lap(obj)
@@ -97,5 +116,5 @@ class WeightMatching():
                 if not progress:
                     break
 
-            return [permmat_to_perm(perm_mats[i].long()) for i in range(len(perm_mats))]
+            return [permmat_to_perm(perm_mats[i].long()) for i in range(len(perm_mats))][:-1]
         

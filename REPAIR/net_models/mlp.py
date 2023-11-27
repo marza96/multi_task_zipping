@@ -23,7 +23,7 @@ class MLP(nn.Module):
             ])
             
         self.layers = nn.Sequential(*mid_layers)
-        self.classifier = nn.Linear(channels, classes)
+        # self.classifier = nn.Linear(channels, classes)
 
     def forward(self, x):
         if x.size(1) == 3:
@@ -31,7 +31,7 @@ class MLP(nn.Module):
 
         x = x.reshape(x.size(0), -1)
         x = self.layers(x)
-        x = self.classifier(x)
+        # x = self.classifier(x)
  
         return x
     

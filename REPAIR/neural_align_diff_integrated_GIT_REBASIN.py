@@ -4,18 +4,132 @@ import copy
 import math
 
 from tqdm import tqdm
-from collections import namedtuple, defaultdict
+from collections import namedtuple, defaultdict, OrderedDict
 from typing import NamedTuple
 
 from .net_models.mlp import LayerWrapper, LayerWrapper2D, CNN
 from .matching.weight_matching import WeightMatching
 from .matching.activation_matching import activation_matching
+from .matching.ste_matching import SteMatching
 import numpy as np
 import torch.nn as nn
 
 import matplotlib.pyplot as plt
 
-torch.set_printoptions(precision=2, sci_mode=False)
+torch.set_printoptions(precision=5, sci_mode=False)
+
+
+def flatten_params(model):
+    return model.state_dict()
+
+def lerp(lam, t1, t2):
+    t3 = copy.deepcopy(t1)
+    for p in t1:
+        t3[p] = (1 - lam) * t1[p] + lam * t2[p]
+    return t3
+
+def freeze(x):
+    ret = copy.deepcopy(x)
+    for key in x:
+        ret[key] = x[key].detach()
+    return ret
+
+def clone(x):
+    ret = OrderedDict()
+    for key in x:
+        ret[key] = x[key].clone().detach()
+    return ret
+
+def wm_learning(model_a, model_b, train_loader, permutation_spec):
+    from torch.nn.utils.stateless import functional_call
+    import torchopt
+
+    device = "mps"
+
+    # Best permutation found so far...
+    best_perm = None
+    best_perm_loss = 999
+    perm = None
+
+    train_state = model_a.state_dict()
+    model_target = copy.deepcopy(model_a)
+
+    optimizer = torchopt.sgd(lr=0.5, momentum=0.9, moment_requires_grad=True)
+
+    for key in train_state:
+        train_state[key] = train_state[key].float()
+
+    opt_state = optimizer.init(train_state)
+
+    for epoch in tqdm(range(0, 10)):
+        correct = 0.
+        loss_acum = 0.0
+        total = 0
+
+        for i, (x, t) in enumerate(tqdm(train_loader, leave=False)):
+            x = x.to(device)
+            t = t.to(device)
+
+            # projection by weight matching
+            perm, _ = weight_matching_ref(permutation_spec,
+                                        train_state, flatten_params(model_b),
+                                        max_iter=100, init_perm=perm, print_flg=False)
+
+            projected_params = apply_permutation(permutation_spec, perm, flatten_params(model_b))
+
+
+            # ste
+            for key in train_state:
+                train_state[key] = train_state[key].detach()  # leaf
+                train_state[key].requires_grad = True
+                train_state[key].grad = None  # optimizer.zero_grad()
+
+
+
+            # straight-through-estimator https://github.com/samuela/git-re-basin/blob/main/src/mnist_mlp_ste2.py#L178
+            ste_params = {}
+            for key in projected_params:
+                ste_params[key] = projected_params[key].detach() + (
+                            train_state[key] - train_state[key].detach())
+
+            midpoint_params = lerp(0.5, freeze(flatten_params(model_a)), ste_params)
+
+            model_target.train()
+
+            output = functional_call(model_target, midpoint_params, x)
+            loss = torch.nn.functional.nll_loss(output, t)
+            loss.backward()
+
+            # optimize
+            grads = OrderedDict()
+            for key in train_state:
+                if train_state[key].grad is None:
+                    grads[key] = torch.zeros_like(train_state[key])
+                else:
+                    grads[key] = train_state[key].grad
+            for key in train_state:
+                train_state[key] = train_state[key].detach()  # avoid opt_sate chain
+            updates, opt_state = optimizer.update(grads, opt_state, params=train_state, inplace=False)
+            train_state = torchopt.apply_updates(train_state, updates, inplace=False)
+
+            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+            correct += pred.eq(t.view_as(pred)).sum().item()
+
+            if loss < best_perm_loss:
+                best_perm_loss = loss.item()
+                best_perm = perm
+            
+            loss_acum += loss.mean()
+            total += 1
+
+        print("LOSS: %d" % i, loss_acum / total)
+
+    final_perm = [None for _ in range(5)]
+    for key in best_perm.keys():
+        idx = key.split("_")[1]
+        final_perm[int(idx)] = best_perm[key].long()
+
+    return final_perm
 
 
 class STEFunction(torch.autograd.Function):
@@ -25,8 +139,8 @@ class STEFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return F.hardtanh(grad_output)
-    
+        return torch.nn.functional.F.hardtanh(grad_output)
+
 
 class StraightThroughEstimator(nn.Module):
     def __init__(self):
@@ -46,16 +160,20 @@ def get_permuted_param(ps: PermutationSpec, perm, k: str, params, except_axis=No
 
     # if k == 'classifier.weight':  # to reshape because of input shape is 3x 96 x 96
     #     w = w.reshape(126, 512 * 4, 3, 3)
-    for axis, p in enumerate(ps.axes_to_perm[k]):
-        # Skip the axis we're trying to permute.
-        if axis == except_axis:
-            continue
+    try:
+        for axis, p in enumerate(ps.axes_to_perm[k]):
+            # Skip the axis we're trying to permute.
+            if axis == except_axis:
+                continue
 
-        # None indicates that there is no permutation relevant to that axis.
-        if p is not None:
-            w = torch.index_select(w, axis, perm[p].int())
-    # if k == 'classifier.weight':
-    #     w = w.reshape(126, -1)
+            # None indicates that there is no permutation relevant to that axis.
+            if p is not None:
+                w = torch.index_select(w, axis, perm[p].int())
+        # if k == 'classifier.weight':
+        #     w = w.reshape(126, -1)
+    except KeyError:
+        pass
+
     return w
 
 
@@ -67,10 +185,11 @@ def apply_permutation(ps: PermutationSpec, perm, params):
             ret[k] = get_permuted_param(ps, perm, k, params)
         else:
             ret[k] = params[k]
+
     return ret
 
 
-def weight_matching_ref(ps: PermutationSpec, params_a, params_b, max_iter=300, init_perm=None, print_flg=True):
+def weight_matching_ref(ps: PermutationSpec, params_a, params_b, max_iter=300, debug_perms=None, init_perm=None, print_flg=True, legacy=True):
     """Find a permutation of `params_b` to make them match `params_a`."""
     perm_sizes = {p: params_a[axes[0][0]].shape[axes[0][1]] for p, axes in ps.perm_to_axes.items()}
     device = list(params_a.values())[0].device
@@ -81,17 +200,21 @@ def weight_matching_ref(ps: PermutationSpec, params_a, params_b, max_iter=300, i
     perm_names = list(perm.keys())
     metrics = {'step': [], 'l2_dist': []}
     step = 0
-    for iteration in range(2): 
+    for iteration in range(max_iter):
         progress = False
-        perm_tens = torch.Tensor([4, 1, 3, 2, 0]).long()
-        for p_ix in perm_tens:
+
+        rperm = torch.randperm(len(perm_names))
+        if debug_perms is not None:
+            rperm = debug_perms[iteration]
+
+        for p_ix in rperm:
             p = perm_names[p_ix]
             n = perm_sizes[p]
             A = torch.zeros((n, n))
             for wk, axis in ps.perm_to_axes[p]:  # layer loop
                 if ('running_mean' not in wk) and ('running_var' not in wk) and ('num_batches_tracked' not in wk):
                     w_a = params_a[wk]  # target
-                    w_b = get_permuted_param(ps, perm, wk, params_b, except_axis=axis) 
+                    w_b = get_permuted_param(ps, perm, wk, params_b, except_axis=axis)
                     w_a = torch.moveaxis(w_a, axis, 0).reshape((n, -1))
                     w_b = torch.moveaxis(w_b, axis, 0).reshape((n, -1))
                     A += w_a @ w_b.T  # A is cost matrix to assignment,
@@ -103,10 +226,10 @@ def weight_matching_ref(ps: PermutationSpec, params_a, params_b, max_iter=300, i
             oldL = torch.einsum('ij,ij->i', A, torch.eye(n)[perm[p].long()]).sum()
             newL = torch.einsum('ij,ij->i', A, torch.eye(n)[ci, :]).sum()
             if print_flg:
-                print(f"{iteration}/{p}: {newL - oldL}") 
+                print(f"{iteration}/{p}: {newL - oldL}")
             progress = progress or newL > oldL + 1e-12
 
-            perm[p] = torch.Tensor(ci) 
+            perm[p] = torch.Tensor(ci)
             p_params_b = apply_permutation(ps, perm, params_b)
             # l2_dist = get_l2(params_a, p_params_b)
             # metrics['step'].append(step)
@@ -114,15 +237,20 @@ def weight_matching_ref(ps: PermutationSpec, params_a, params_b, max_iter=300, i
             step += 1
         if not progress:
             break
-    
-    print(perm.keys())
-    perm = {key: perm[key].to(device) for key in perm}  # to device
+
+    perm = {key: perm[key].to("mps") for key in perm}  # to device
     final_perm = [None for _ in range(5)]
     for key in perm.keys():
         idx = key.split("_")[1]
         final_perm[int(idx)] = perm[key].long()
     params_a = {key: params_a[key].to(device) for key in params_a}  # to device
     params_b = {key: params_b[key].to(device) for key in params_b}  # to device
+
+    # IF used in my framework then uncomment this
+
+    if legacy is True:
+        return perm, metrics
+    
     return final_perm, metrics
 
 
@@ -163,7 +291,7 @@ def mlp_permutation_spec(num_hidden_layers: int, bias_flg: bool) -> PermutationS
                for i in range(1, num_hidden_layers)},
             f"layer{num_hidden_layers}.weight": (None, f"P_{num_hidden_layers - 1}"),
         })
-    
+
 
 class NeuralAlignDiff:
     def perm_coord_descent(self, net0, net1, epochs=1, device=None):
@@ -199,18 +327,18 @@ class NeuralAlignDiff:
                 for i in rperm:
                     obj = torch.zeros(
                         (
-                            weights0[i].shape[0], 
+                            weights0[i].shape[0],
                             weights0[i].shape[0]
                         )
                     )
 
                     if i > 0:
-                        obj += weights0[i] @ new_perm_mats[i - 1] @ weights1[i].T 
+                        obj += weights0[i] @ new_perm_mats[i - 1] @ weights1[i].T
 
                         # print(torch.sum(weights0[i] @ new_perm_mats[i - 1] @ weights1[i].T))
 
                     if i == 0:
-                        obj += weights0[i] @  weights1[i].T 
+                        obj += weights0[i] @  weights1[i].T
 
                         # print(torch.sum(weights0[i] @ weights1[i].T))
 
@@ -219,21 +347,21 @@ class NeuralAlignDiff:
 
                     if i < len(weights0) - 1:
                         obj += weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1]
-                    
+
                         # print(torch.sum(weights0[i + 1].T @ new_perm_mats[i + 1] @ weights1[i + 1]))
 
                     # print("................")
-                     
-                
+
+
                     ri, ci = scipy.optimize.linear_sum_assignment(obj.detach().numpy(), maximize=True)
                     assert (torch.tensor(ri) == torch.arange(len(ri))).all()
                     oldL = torch.einsum('ij,ij->i', obj, torch.eye(weights0[i].shape[0])[self.permmat_to_perm(new_perm_mats[i]).long(), :]).sum()
                     newL = torch.einsum('ij,ij->i', obj, torch.eye(weights0[i].shape[0])[ci, :]).sum()
-                    print(f"{iteration}/{i}: {newL - oldL}") 
+                    print(f"{iteration}/{i}: {newL - oldL}")
                     progress = progress or newL > oldL + 1e-12
-                
+
                     new_perm_mats[i] = copy.deepcopy(self.perm_to_permmat(ci))
-            
+
                 if not progress:
                     print("NO", iteration)
                     break
@@ -279,7 +407,7 @@ class NeuralAlignDiff:
 
                     if i == 0:
                         F = torch.zeros(prod.shape).to(device)
-                    
+
                     F += prod
 
         return F
@@ -335,7 +463,7 @@ class NeuralAlignDiff:
         perm_map = torch.tensor(col_ind).long()
 
         return perm_map
-    
+
     def perm_to_permmat(self, permutation):
         perm_mat = torch.zeros((len(permutation), len(permutation)))
         perm_mat[torch.arange(len(permutation)), permutation] = 1
@@ -350,10 +478,10 @@ class NeuralAlignDiff:
 
     def get_layer_perm(self, net0, net1, epochs=1, loader=None, device=None):
         corr_mtx = self.run_corr_matrix(
-            net0, 
-            net1, 
-            epochs=1, 
-            loader=loader, 
+            net0,
+            net1,
+            epochs=1,
+            loader=loader,
             device=device
         )
 
@@ -362,7 +490,7 @@ class NeuralAlignDiff:
     def index_layers(self, model):
         if self.layers_indexed is True:
             return
-        
+
         for idx, m in enumerate(model.layers):
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
                 self.layer_indices.append(idx)
@@ -379,35 +507,76 @@ class NeuralAlignDiff:
         if self.perms_calc is False:
             # self.permutations = self.perm_coord_descent(cl0, cl1, epochs=400, device=device)
             # self.perms_calc = True
-            
+
             dct0 = copy.deepcopy(cl0.cpu().state_dict())
             dct1 = copy.deepcopy(cl1.cpu().state_dict())
-            print(dct0.keys())
-            dct0.pop("classifier.weight")
-            dct0.pop("classifier.bias")
-            dct1.pop("classifier.weight")
-            dct1.pop("classifier.bias")
+
+            # torch.manual_seed(0)
+
+            # iterations = 100
+            # global_perms = [
+            #     torch.randperm(len(self.layer_indices) - 1) for _ in range(iterations)
+            # ]
+            # ps = mlp_permutation_spec(5, True)
+            # self.permutations, _ = weight_matching_ref(ps, dct0, dct1, max_iter=iterations, debug_perms=global_perms, legacy=False)
+            # for perm in self.permutations:
+            #     print(perm[:11])
+            # # print("....................")
+            # self.permutations = WeightMatching(epochs=iterations, debug=True, debug_perms=global_perms,)(self.layer_indices, cl0, cl1)
+            # for perm in self.permutations:
+            #     print(perm[:11])
+            # self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
+
+
 
             ps = mlp_permutation_spec(5, True)
-            weight_matching_ref(ps, dct0, dct1)
-            print("....................")
-            WeightMatching(debug=True)(self.layer_indices, cl0, cl1)
+            cl0 = cl0.to("mps")
+            cl1 = cl1.to("mps")
+            self.permutations = wm_learning(cl0, cl1, self.loaderc, ps)
+            self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
 
-        #     self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
-        #     print(self.permutations[0].shape, len(self.layer_indices))
-        
+
+
+            # ste_matchin = SteMatching(
+            #     torch.nn.CrossEntropyLoss(),
+            #     self.loaderc,
+            #     0.1,
+            #     epochs=10,
+            #     device="mps",
+            #     wm_kwargs={
+            #         "epochs": 100,
+            #         "debug": False
+            #     }
+            # )
+            # self.permutations = ste_matchin(self.layer_indices, cl0, cl1)
+            # self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
+
+
+        model0 = model0.to("mps")
+        model1 = model1.to("mps")
+
+        # self.permutations = list()
+        # if self.perms_calc is False:
+        #     for i, layer_idx in enumerate(self.layer_indices):
+        #         if i == len(self.layer_indices) - 1:
+        #             self.permutations.append(self.permmat_to_perm(torch.eye(128)))
+        #             break
+
+        #         perm_map_, corr_mtx = self.get_layer_perm(
+        #             model0.subnet(cl0, layer_i=layer_idx).to("mps"),
+        #             model1.subnet(cl1, layer_i=layer_idx).to("mps"),
+        #             epochs=1,
+        #             loader=loader,
+        #             device=device
+        #         )
+        #         self.permutations.append(perm_map_)
+
+        # for perm in self.permutations:
+        #     print(perm[:11])
+
+        print("DONE")
         last_perm_map = None
         for i, layer_idx in enumerate(self.layer_indices):
-            # if self.perms_calc is False:
-            #     perm_map_, corr_mtx = self.get_layer_perm(
-            #         model0.subnet(cl0, layer_i=layer_idx), 
-            #         model1.subnet(cl1, layer_i=layer_idx), 
-            #         epochs=1, 
-            #         loader=loader, 
-            #         device=device
-            #     )
-            #     self.permutations.append(perm_map_)
-
             perm_map = self.permutations[i]
             weight   = model1.layers[layer_idx].weight
             bias     = model1.layers[layer_idx].bias
@@ -416,16 +585,18 @@ class NeuralAlignDiff:
             model1.layers[layer_idx].bias.data   = bias[perm_map].clone()
 
             weight = model1.layers[layer_idx].weight
-
+            
             if i > 0:
                 model1.layers[layer_idx].weight.data = weight[:, last_perm_map].clone()
 
             last_perm_map = perm_map
 
-        last_perm_map = self.permutations[-1]
-        weight = model1.classifier.weight
+        # last_perm_map = self.permutations[-1]
+        # weight = model1.classifier.weight
+        # model1.classifier.weight.data = weight[:, last_perm_map].clone()
 
-        model1.classifier.weight.data = weight[:, last_perm_map].clone()
+        # weight = model1.layers[self.layer_indices[-1]].weight
+        # model1.layers[self.layer_indices[-1]].weight.data = weight[:, last_perm_map].clone()
 
         self.perms_calc = True
 
@@ -433,7 +604,7 @@ class NeuralAlignDiff:
 
     def wrap_layers_smart(self, model, rescale):
         wrapped_model = model
-        
+
         for i, layer_idx in enumerate(self.layer_indices):
             layer = model.layers[layer_idx]
 
@@ -451,18 +622,18 @@ class NeuralAlignDiff:
         sd1 = model1.state_dict()
         sd_alpha = {k: (1 - alpha) * sd0[k] + alpha * sd1[k]
                     for k in sd0.keys()}
-        
-        model.load_state_dict(sd_alpha)
-        
 
-    def fuse_networks(self, model_args, model0, model1, alpha, loader=None, device=None, new_stats=True, permute = True):    
+        model.load_state_dict(sd_alpha)
+
+
+    def fuse_networks(self, model_args, model0, model1, alpha, loader=None, device=None, new_stats=True, permute = True):
         modela = self.model_cls(**model_args).to(device)
 
         if permute is True:
             model0, model1 = self.align_networks_smart(
-                model0, 
-                model1, 
-                loader=self.loaderc, 
+                model0,
+                model1,
+                loader=self.loaderc,
                 device=device
             )
             self.dbg0 = model0
@@ -471,9 +642,10 @@ class NeuralAlignDiff:
 
         if new_stats is False:
             return modela
-        
+
+        print("HERE")
         return self.REPAIR_smart(alpha, model0, model1, modela, loader=loader, device=device)
-    
+
     def REPAIR_smart(self, alpha, model0, model1, modela, loader=None, device=None):
         model0_tracked = self.wrap_layers_smart(model0, rescale=False).to(device)
         model1_tracked = self.wrap_layers_smart(model1, rescale=False).to(device)
@@ -491,7 +663,7 @@ class NeuralAlignDiff:
                 if isinstance(m, nn.modules.batchnorm._BatchNorm):
                     m.momentum = None
                     m.reset_running_stats()
-            
+
             with torch.no_grad():
                 for inputs, labels in self.loader0:
                     _ = model0_tracked(inputs.to(device))
@@ -501,7 +673,7 @@ class NeuralAlignDiff:
 
             model0_tracked.eval()
             model1_tracked.eval()
-            
+
             for i, layer_idx in enumerate(self.layer_indices):
                 layer0 = model0_tracked.layers[layer_idx]
                 layer1 = model1_tracked.layers[layer_idx]
@@ -517,7 +689,7 @@ class NeuralAlignDiff:
 
             mean = (1.0 - alpha) * stats0[0] + alpha * stats1[0]
             std = ((1.0 - alpha) * stats0[1].sqrt() + alpha * stats1[1].sqrt()).square()
-    
+
             modela_tracked.layers[layer_idx].set_stats(mean, std)
             modela_tracked.layers[layer_idx].rescale = True
 
@@ -526,15 +698,14 @@ class NeuralAlignDiff:
             if isinstance(m, nn.modules.batchnorm._BatchNorm):
                 m.momentum = None
                 m.reset_running_stats()
-        
+
         with torch.no_grad():
             for _ in range(3):
                 for inputs, labels in self.loaderc:
                     _ = modela_tracked(inputs.to(device))
 
         modela_tracked.eval()
-        
+
         self.stats_calc = True
 
         return modela_tracked
-    
