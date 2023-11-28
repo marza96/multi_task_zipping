@@ -13,6 +13,7 @@ from torch.nn.utils.stateless import functional_call
 
 from collections import OrderedDict
 from torchviz import make_dot
+# import torchopt
 
 
 class STE(torch.autograd.Function):
@@ -57,6 +58,9 @@ class LinearStraightThroughEstimator(torch.nn.Module):
         self.bias.requires_grad   = True
 
     def reset(self, layer_1, perms):
+        self.weight.requires_grad = True
+        self.bias.requires_grad   = True
+
         self.w_1   = layer_1.weight.detach().float()
         self.b_1   = layer_1.bias.detach().float()
         self.perms = perms
@@ -120,66 +124,80 @@ class SteMatching:
 
         loss_fn = torch.nn.NLLLoss()
         netm = self._wrap_network(layer_indices, net0.to(self.device), net1.to(self.device), copy.deepcopy(perms))
-        optimizer = SGD(netm.parameters(), lr=0.01, momentum=0.0)
+        # optimizer = SGD(netm.parameters(), lr=0.01, momentum=0.0)
         # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.75)
+        # optimizer = torchopt.sgd(lr=0.5, momentum=0.9, moment_requires_grad=True)
+        # opt_state = None
 
-        with torch.autograd.enable_grad():
-            for iteration in range(self.epochs):
-                loss_acum = 0.0
-                total = 0
+        for iteration in range(self.epochs):
+            loss_acum = 0.0
+            total = 0
 
-                for i, (images, labels) in enumerate(tqdm.tqdm(self.loader)):
-                    images = images.to(self.device)
-                    labels = labels.to(self.device)
+            for i, (images, labels) in enumerate(tqdm.tqdm(self.loader)):
+                images = images.to(self.device)
+                labels = labels.to(self.device)
 
-                    perms = self.weight_matching(layer_indices, copy.deepcopy(netm), copy.deepcopy(net1), init_perm=perms)
-                    self._reset_network(layer_indices, netm, net0.to(self.device), net1.to(self.device), copy.deepcopy(perms))
+                perms = self.weight_matching(layer_indices, copy.deepcopy(netm), copy.deepcopy(net1), init_perm=perms)
+                self._reset_network(layer_indices, netm, net1.to(self.device), copy.deepcopy(perms), zero_grad=False)
+                # if opt_state is None:
+                    # opt_state = optimizer.init(netm.state_dict())
 
-                    outputs = netm(images)
+                outputs = netm(images)
+                loss = loss_fn(outputs, labels)
+                loss.backward()
 
-                    loss = loss_fn(outputs, labels)
-                    loss.backward()
-
-                    for perm in perms:
-                        print(perm[:11])
+                # if i == 1: 
+                #     print("---------------")
+                #     for name, param in netm.named_parameters():
+                #         if param.requires_grad is False:
+                #             continue
                         
-                    print("---------------")
-                    for name, param in netm.named_parameters():
-                        if param.requires_grad is False:
-                            continue
-                        
-                        print("PARAM", name)
-                        try:
-                            print(name, param.grad[:5, :5])
-                        except:
-                            print(name, param.grad[:5])
-                    print("......................................")
+                #         print("PARAM", name)
+                #         try:
+                #             print(name, param.grad[:5, :5])
+                #         except:
+                #             print(name, param.grad[:5])
+                #     print("......................................")
+                #     return
 
-                    return
+                # GOOD LR 0.00001
+                for name, param in netm.named_parameters():
+                    new_param = param.detach() - 0.0001 * param.grad.detach()
+                    param.data = new_param.detach()
+
+                # print("---------------")
+                # for name, param in netm.named_parameters():
+                #     if param.requires_grad is False:
+                #         continue
                     
-                    optimizer.step()
+                #     try:
+                #         print(name, param[:5, :5])
+                #     except:
+                #         print(name, param[:5])
+                # print("......................................")
+                # return
+                
+                if loss.mean() < best_perm_loss:
+                    best_perm_loss = loss.mean()
+                    best_perm = copy.deepcopy([perm.cpu() for perm in perms])
+                    # print("BEST: ", best_perm_loss)
 
-                    if loss.mean() < best_perm_loss:
-                        best_perm_loss = loss.mean()
-                        best_perm = copy.deepcopy([perm.cpu() for perm in perms])
-                        # print("BEST: ", best_perm_loss)
+                loss_acum += loss.mean()
+                total += 1
 
-                    loss_acum += loss.mean()
-                    total += 1
+            # scheduler.step()
 
-                # scheduler.step()
+            # total_loss = loss_acum / total
+            # if total_loss < best_perm_loss:
+            #     best_perm_loss = total_loss
+            #     best_perm = copy.deepcopy([perm.cpu() for perm in perms])
+            #     print("BEST: ", best_perm_loss)
 
-                # total_loss = loss_acum / total
-                # if total_loss < best_perm_loss:
-                #     best_perm_loss = total_loss
-                #     best_perm = copy.deepcopy([perm.cpu() for perm in perms])
-                #     print("BEST: ", best_perm_loss)
-
-                print("LOSS: %d" % iteration, loss_acum / total)
-                for perm in best_perm:
-                    print(perm[:11])
-            
-            return best_perm
+            print("LOSS: %d" % iteration, loss_acum / total)
+            for perm in best_perm:
+                print(perm[:11])
+        
+        return best_perm
     
     def _wrap_network(self, layer_indices, net0, net1, perms):
         wrapped_model = copy.deepcopy(net1)
@@ -190,19 +208,27 @@ class SteMatching:
             layer1 = net1.layers[layer_idx]
             wrapper = LinearStraightThroughEstimator
 
-            layers.extend(
-                [
+            lst = [
                     wrapper(layer0, layer1, i, perms), 
                     torch.nn.ReLU()
                 ]
+            if i == 5:
+                [
+                    wrapper(layer0, layer1, i, perms), 
+                ]
+            layers.extend(
+                lst
             )
 
         wrapped_model.layers = torch.nn.Sequential(*layers)
 
         return wrapped_model
     
-    def _reset_network(self, layer_indices, netm, net0, net1, perms):
+    def _reset_network(self, layer_indices, netm, net1, perms, zero_grad=True):
         for i, layer_idx in enumerate(layer_indices):
             layer1 = net1.layers[layer_idx]
 
             netm.layers[layer_idx].reset(layer1, perms)
+
+            if zero_grad is True:
+                netm.layers.zero_grad()
