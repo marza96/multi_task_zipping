@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from torchviz import make_dot
 
 
-torch.set_printoptions(precision=6, sci_mode=False)
+torch.set_printoptions(precision=4, sci_mode=False)
 
 
 def flatten_params(model):
@@ -75,7 +75,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, dbg_perm=None)
             # projection by weight matching
             perm, pdb = weight_matching_ref(permutation_spec,
                                         train_state, flatten_params(model_b),
-                                        max_iter=1, print_flg=False, debug_perms=dbg_perm)
+                                        max_iter=100, debug_perms=dbg_perm, init_perm=perm)
 
             projected_params = apply_permutation(permutation_spec, perm, flatten_params(model_b))
 
@@ -98,7 +98,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, dbg_perm=None)
 
 
             output = functional_call(model_target, midpoint_params, x)
-            print("OUT LEG", output[0, :11])
+            # print("OUT LEG", output[0, :11])
 
             # make_dot(output, params=dict(list(model_target.named_parameters()))).render("leg_tv", format="png")
             
@@ -106,8 +106,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, dbg_perm=None)
             
             loss.backward()
 
-            for perm in pdb:
-                print(perm[:11])
+            
             # if i == 1:
             #     print("iter %d ....................." % i)
             #     for key in train_state:
@@ -120,10 +119,13 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, dbg_perm=None)
             #     print("......................................")
             #     return
 
-            if i == 1:
+            if i == 2:
+                for perm in pdb:
+                    print(perm[:11])
+
                 print("iter %d ....................." % i)
                 for key in train_state:
-                    if not "layers.10" in key:
+                    if not "layers.6" in key:
                         continue
 
                     try:
@@ -149,7 +151,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, dbg_perm=None)
             #     print("......................................")
             #     return
             
-            if i == 1:
+            if i == 2:
                 return
 
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
@@ -229,7 +231,7 @@ def apply_permutation(ps: PermutationSpec, perm, params):
     return ret
 
 
-def weight_matching_ref(ps: PermutationSpec, params_a, params_b, max_iter=300, debug_perms=None, init_perm=None, print_flg=True, legacy=True):
+def weight_matching_ref(ps: PermutationSpec, params_a, params_b, max_iter=300, debug_perms=None, init_perm=None, print_flg=False, legacy=True):
     """Find a permutation of `params_b` to make them match `params_a`."""
     perm_sizes = {p: params_a[axes[0][0]].shape[axes[0][1]] for p, axes in ps.perm_to_axes.items()}
     device = list(params_a.values())[0].device
@@ -561,7 +563,7 @@ class NeuralAlignDiff:
             # self.permutations, _ = weight_matching_ref(ps, dct0, dct1, max_iter=iterations, debug_perms=global_perms, legacy=False)
             # for perm in self.permutations:
             #     print(perm[:11])
-            # # print("....................")
+            # print("....................")
             # self.permutations = WeightMatching(epochs=iterations, debug=True, debug_perms=global_perms,)(self.layer_indices, cl0, cl1)
             # for perm in self.permutations:
             #     print(perm[:11])
@@ -582,7 +584,7 @@ class NeuralAlignDiff:
                 epochs=10,
                 device="mps",
                 wm_kwargs={
-                    "epochs": 1,
+                    "epochs": 100,
                     "debug": False,
                     "debug_perms": global_perms
                 }

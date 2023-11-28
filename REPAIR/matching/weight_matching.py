@@ -89,7 +89,7 @@ class WeightMatching():
             if init_perm is not None:
                 for i in range(len(weights0) - 1):
                     perm_mats[i] = perm_to_permmat(init_perm[i])
-
+            
             for iteration in range(self.epochs):
                 progress = False
                 rperm = torch.randperm(len(layer_indices) - 1)
