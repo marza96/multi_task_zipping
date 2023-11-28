@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from torchviz import make_dot
 
 
-torch.set_printoptions(precision=5, sci_mode=False)
+torch.set_printoptions(precision=6, sci_mode=False)
 
 
 def flatten_params(model):
@@ -56,7 +56,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, dbg_perm=None)
     train_state = model_a.state_dict()
     model_target = copy.deepcopy(model_a)
 
-    optimizer = torchopt.sgd(lr=0.05, momentum=0.9, moment_requires_grad=True)
+    optimizer = torchopt.sgd(lr=0.0001, momentum=0.000, moment_requires_grad=False)
 
     for key in train_state:
         train_state[key] = train_state[key].float()
@@ -73,15 +73,13 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, dbg_perm=None)
             t = t.to(device)
 
             # projection by weight matching
-            perm, _ = weight_matching_ref(permutation_spec,
+            perm, pdb = weight_matching_ref(permutation_spec,
                                         train_state, flatten_params(model_b),
-                                        max_iter=100, print_flg=False, debug_perms=dbg_perm)
+                                        max_iter=1, print_flg=False, debug_perms=dbg_perm)
 
-            for p in perm:
-                print(perm[p][:11])
             projected_params = apply_permutation(permutation_spec, perm, flatten_params(model_b))
 
-
+            
             # ste
             for key in train_state:
                 train_state[key] = train_state[key].detach()  # leaf
@@ -101,36 +99,58 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, dbg_perm=None)
 
             output = functional_call(model_target, midpoint_params, x)
             print("OUT LEG", output[0, :11])
-            # return
 
-            make_dot(output, params=dict(list(model_target.named_parameters()))).render("leg_tv", format="png")
+            # make_dot(output, params=dict(list(model_target.named_parameters()))).render("leg_tv", format="png")
             
-
             loss = torch.nn.functional.nll_loss(output, t)
-            print("LEG LOSS", loss.item())
             
             loss.backward()
 
-            for key in train_state:
-                try:
-                    print(key, train_state[key].grad[:5, :5])
-                except:
-                    print(key, train_state[key].grad[:5])
+            for perm in pdb:
+                print(perm[:11])
+            # if i == 1:
+            #     print("iter %d ....................." % i)
+            #     for key in train_state:
+            #         if not "layers.10" in key:
+            #             continue
+            #         try:
+            #             print("LEG W", key, train_state[key][:5, :5])
+            #         except:
+            #             print("LEG W", key, train_state[key][:5])
+            #     print("......................................")
+            #     return
 
-            print("......................................")
-            return
+            if i == 1:
+                print("iter %d ....................." % i)
+                for key in train_state:
+                    if not "layers.10" in key:
+                        continue
 
-            # optimize
-            grads = OrderedDict()
-            for key in train_state:
-                if train_state[key].grad is None:
-                    grads[key] = torch.zeros_like(train_state[key])
-                else:
-                    grads[key] = train_state[key].grad
-            for key in train_state:
-                train_state[key] = train_state[key].detach()  # avoid opt_sate chain
-            updates, opt_state = optimizer.update(grads, opt_state, params=train_state, inplace=False)
-            train_state = torchopt.apply_updates(train_state, updates, inplace=False)
+                    try:
+                        print("LEG G", key, train_state[key].grad[:5, :5])
+                    except:
+                        print("LEG G", key, train_state[key].grad[:5])
+
+                print("......................................")
+
+            for key in train_state.keys():
+                new_param = train_state[key].detach() - 0.01 * train_state[key].grad.detach()
+                train_state[key].data = new_param.detach()
+
+            # if i == 0:
+            #     print("iter %d ....................." % i)
+            #     for key in train_state:
+            #         if not "layers.10" in key:
+            #             continue
+            #         try:
+            #             print("LEG W", key, train_state[key][:5, :5])
+            #         except:
+            #             print("LEG W", key, train_state[key][:5])
+            #     print("......................................")
+            #     return
+            
+            if i == 1:
+                return
 
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(t.view_as(pred)).sum().item()
@@ -269,7 +289,7 @@ def weight_matching_ref(ps: PermutationSpec, params_a, params_b, max_iter=300, d
     # IF used in my framework then uncomment this
 
     if legacy is True:
-        return perm, metrics
+        return perm, final_perm
     
     return final_perm, metrics
 
@@ -548,14 +568,13 @@ class NeuralAlignDiff:
             # self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
 
 
-            # ps = mlp_permutation_spec(5, True)
-            # cl0 = cl0.to("mps")
-            # cl1 = cl1.to("mps")
-            # self.permutations = wm_learning(cl0, cl1, self.loaderc, ps, dbg_perm=global_perms)
+            ps = mlp_permutation_spec(5, True)
+            cl0 = cl0.to("mps")
+            cl1 = cl1.to("mps")
+            self.permutations = wm_learning(cl0, cl1, self.loaderc, ps, dbg_perm=global_perms)
             # self.permutations =  self.permutations + [self.permmat_to_perm(torch.eye(128))]
 
-            cl0 = copy.deepcopy(model0.to("cpu")).to(device)
-            cl1 = copy.deepcopy(model1.to("cpu")).to(device)
+            
             ste_matchin = SteMatching(
                 torch.nn.CrossEntropyLoss(),
                 self.loaderc,
@@ -563,7 +582,7 @@ class NeuralAlignDiff:
                 epochs=10,
                 device="mps",
                 wm_kwargs={
-                    "epochs": 100,
+                    "epochs": 1,
                     "debug": False,
                     "debug_perms": global_perms
                 }

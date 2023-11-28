@@ -16,6 +16,93 @@ from torchviz import make_dot
 # import torchopt
 
 
+class ModSTE(torch.autograd.Function):
+    @staticmethod
+    def forward(input, w_for, b_for, w_back, b_back, w_0):
+        a = input.mm(w_for.detach().t()) + b_for.detach()
+
+        return a 
+
+    @staticmethod
+    def setup_context(ctx, inputs, output):
+        input, w_for, b_for, w_back, b_back, w_0 = inputs
+        ctx.save_for_backward(input, w_for, b_for, w_back, b_back, w_0)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        input, w_for, b_for, w_back, b_back, w_0 = ctx.saved_tensors
+        grad_input = grad_weight = grad_bias = None
+
+        grad_bias   = grad_output.sum(0) * 0.5
+        grad_input  = grad_output.mm(w_0.detach())
+        grad_weight = grad_output.t().mm(input) * 0.5
+
+        return grad_input, None, None, grad_weight, grad_bias, None
+
+
+class ModLinearStraightThroughEstimator(torch.nn.Module):
+    def __init__(self, layer_0, layer_1, idx, perms):
+        super().__init__()
+        
+        self.idx   = idx
+        self.perms = perms
+        self.w_0   = layer_0.weight.detach().float()
+        self.w_1   = layer_1.weight.detach().float()
+        self.b_0   = layer_0.bias.detach().float()
+        self.b_1   = layer_1.bias.detach().float()
+
+        self.weight = torch.nn.Parameter(layer_0.weight.detach().float())
+        self.bias   = torch.nn.Parameter(layer_0.bias.detach().float())
+
+        self.weight.requires_grad = True
+        self.bias.requires_grad   = True
+
+    def reset(self, layer_1, perms):
+        self.weight.requires_grad = True
+        self.bias.requires_grad   = True
+
+        self.w_1   = layer_1.weight.detach().float()
+        self.b_1   = layer_1.bias.detach().float()
+        self.perms = perms
+
+    def forward(self, input): 
+        x     = input
+        p_in  = None
+        p_out = None
+
+        if self.idx == 0:
+            p_in = torch.arange(x.shape[1]).long()
+            p_in.to(x.device)
+        elif self.idx > 0:
+            p_in = self.perms[self.idx - 1]
+            p_in.to(x.device)
+
+        if self.idx < len(self.perms):
+            p_out = self.perms[self.idx]
+            p_out.to(x.device)
+        else:
+            p_out = torch.arange(self.weight.shape[0])
+            p_out.to(x.device)
+
+        self.w_1 = self.w_1[p_out, :]
+        self.w_1 = self.w_1[:, p_in]
+        self.b_1 = self.b_1[p_out]
+
+        x = ModSTE.apply(
+            x, 
+            0.5 * (self.w_0 + self.w_1),
+            0.5 * (self.b_0 + self.b_1),
+            self.weight,
+            self.bias,
+            0.5 * (self.weight.detach() + self.w_1)
+        )
+        
+        return x
+    
+
+
+
+
 class STE(torch.autograd.Function):
     @staticmethod
     def forward(input, w_for, b_for, w_back, b_back):
@@ -97,6 +184,9 @@ class LinearStraightThroughEstimator(torch.nn.Module):
         )
         
         return x
+    
+
+    
 
 class SteMatching:
     def __init__(self, loss_fn, loader, lr, debug=False, epochs=6, device="mps", wm_kwargs=None):
@@ -129,6 +219,8 @@ class SteMatching:
         # optimizer = torchopt.sgd(lr=0.5, momentum=0.9, moment_requires_grad=True)
         # opt_state = None
 
+        perms = self.weight_matching(layer_indices, copy.deepcopy(netm), copy.deepcopy(net1), init_perm=perms)
+
         for iteration in range(self.epochs):
             loss_acum = 0.0
             total = 0
@@ -137,45 +229,72 @@ class SteMatching:
                 images = images.to(self.device)
                 labels = labels.to(self.device)
 
-                perms = self.weight_matching(layer_indices, copy.deepcopy(netm), copy.deepcopy(net1), init_perm=perms)
-                self._reset_network(layer_indices, netm, net1.to(self.device), copy.deepcopy(perms), zero_grad=False)
+                self._reset_network(layer_indices, netm, net1.to(self.device), copy.deepcopy(perms), zero_grad=True)
                 # if opt_state is None:
                     # opt_state = optimizer.init(netm.state_dict())
 
                 outputs = netm(images)
+                print("OUT MY", outputs[0, :11])
+
                 loss = loss_fn(outputs, labels)
                 loss.backward()
 
-                # if i == 1: 
-                #     print("---------------")
+                for perm in perms:
+                        print(perm[:11])
+                # if i == 1:
+                #     print("iter %d ....................." % i)
                 #     for name, param in netm.named_parameters():
                 #         if param.requires_grad is False:
                 #             continue
                         
-                #         print("PARAM", name)
+                #         if not "layers.10" in name:
+                #             continue
+                        
                 #         try:
-                #             print(name, param.grad[:5, :5])
+                #             print("MY W", name, param[:5, :5])
                 #         except:
-                #             print(name, param.grad[:5])
+                #             print("MY W", name, param[:5])
                 #     print("......................................")
                 #     return
 
+                if i == 1: 
+                    print("iter %d ....................." % i)
+                    for name, param in netm.named_parameters():
+                        if param.requires_grad is False:
+                            continue
+
+                        if not "layers.10" in name:
+                            continue
+                        
+                        try:
+                            print("MY G", name, param.grad[:5, :5])
+                        except:
+                            print("MY G", name, param.grad[:5])
+                    print("......................................")
+
                 # GOOD LR 0.00001
                 for name, param in netm.named_parameters():
-                    new_param = param.detach() - 0.0001 * param.grad.detach()
+                    new_param = param.detach() - 0.01 * param.grad.detach()
                     param.data = new_param.detach()
 
-                # print("---------------")
-                # for name, param in netm.named_parameters():
-                #     if param.requires_grad is False:
-                #         continue
-                    
-                #     try:
-                #         print(name, param[:5, :5])
-                #     except:
-                #         print(name, param[:5])
-                # print("......................................")
-                # return
+                # if i == 0:
+                #     print("iter %d ....................." % i)
+                #     for name, param in netm.named_parameters():
+                #         if param.requires_grad is False:
+                #             continue
+                        
+                #         if not "layers.10" in name:
+                #             continue
+                        
+                #         try:
+                #             print("MY W", name, param[:5, :5])
+                #         except:
+                #             print("MY W", name, param[:5])
+                #     print("......................................")
+                #     return
+
+                if i == 1:
+                    return
                 
                 if loss.mean() < best_perm_loss:
                     best_perm_loss = loss.mean()
@@ -206,7 +325,7 @@ class SteMatching:
         for i, layer_idx in enumerate(layer_indices):
             layer0 = net0.layers[layer_idx]
             layer1 = net1.layers[layer_idx]
-            wrapper = LinearStraightThroughEstimator
+            wrapper = ModLinearStraightThroughEstimator
 
             lst = [
                     wrapper(layer0, layer1, i, perms), 
@@ -215,6 +334,7 @@ class SteMatching:
             if i == 5:
                 [
                     wrapper(layer0, layer1, i, perms), 
+                    torch.nn.ReLU()
                 ]
             layers.extend(
                 lst
@@ -229,6 +349,5 @@ class SteMatching:
             layer1 = net1.layers[layer_idx]
 
             netm.layers[layer_idx].reset(layer1, perms)
-
             if zero_grad is True:
                 netm.layers.zero_grad()
