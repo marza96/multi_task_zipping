@@ -1,14 +1,15 @@
 import torch
 import copy
 
-from .utils import perm_to_permmat, permmat_to_perm, solve_lap
+from .matching_utils import perm_to_permmat, permmat_to_perm, solve_lap, apply_permutation
 
 
 class WeightMatching():
-    def __init__(self, debug=False, epochs=1, debug_perms=None):
-        self.debug = debug
-        self.epochs = epochs
+    def __init__(self, debug=False, epochs=1, debug_perms=None, ret_perms=False):
+        self.debug       = debug
+        self.epochs      = epochs
         self.debug_perms = debug_perms
+        self.ret_perms   = ret_perms
 
     def objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
         obj = torch.zeros(
@@ -42,8 +43,29 @@ class WeightMatching():
             obj += w0_ii.T @ perm_mats[idx + 1] @ w1_ii
         
         return obj
+    
+    def apply_permutation(self, layer_indices, net, perms):
+        last_perm_map = None
+        net = copy.deepcopy(net)
+        perms =  perms + [permmat_to_perm(torch.eye(128))]
+        for i, layer_idx in enumerate(layer_indices):
+            perm_map = perms[i]
+            weight   = net.layers[layer_idx].weight
+            bias     = net.layers[layer_idx].bias
 
-    def __call__(self, layer_indices, net0, net1, ste=False, init_perm=None):
+            net.layers[layer_idx].weight.data = weight[perm_map].clone()
+            net.layers[layer_idx].bias.data   = bias[perm_map].clone()
+
+            weight = net.layers[layer_idx].weight
+            
+            if i > 0:
+                net.layers[layer_idx].weight.data = weight[:, last_perm_map].clone()
+
+            last_perm_map = perm_map
+
+        return net
+
+    def __call__(self, layer_indices, net0, net1, ste=False, init_perm=None, penalty=None):
         with torch.no_grad():
 
             if ste is True:
@@ -99,6 +121,10 @@ class WeightMatching():
 
                 for i in rperm:
                     obj  = self.objective(i, perm_mats, weights0, weights1, biases0, biases1, l_types)
+
+                    if penalty is not None:
+                        obj -= penalty
+
                     perm = solve_lap(obj)
                     oldL = torch.einsum(
                         'ij,ij->i', 
@@ -116,9 +142,16 @@ class WeightMatching():
 
                     if self.debug is True:
                         print(f"{iteration}/{i}: {newL - oldL}") 
-
+                
                 if not progress:
                     break
-
-            return [permmat_to_perm(perm_mats[i].long()) for i in range(len(perm_mats))][:-1]
+            
+            final_perms = [permmat_to_perm(perm_mats[i].long()) for i in range(len(perm_mats))][:-1]
+            
+            if self.ret_perms is True:
+                return final_perms
+            
+            net1 = apply_permutation(layer_indices, net1, final_perms)
+            
+            return net1
         
