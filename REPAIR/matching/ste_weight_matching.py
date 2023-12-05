@@ -24,7 +24,7 @@ class STEFunc(torch.autograd.Function):
         grad_input = grad_weight = grad_bias = None
 
         grad_bias   = grad_output.sum(0) / 2.0
-        grad_input  = 0.5 * (grad_output.mm(w_hat_d.detach()) + grad_output.mm(w_1.detach()))
+        grad_input  = grad_output.mm(w_hat_d.detach()) + grad_output.mm(w_1.detach())
         grad_weight = grad_output.t().mm(input.detach()) / 2.0
 
         return grad_input, None, None, grad_weight, grad_bias, None, None
@@ -86,8 +86,8 @@ class STE(torch.nn.Module):
             0.5 * (self.b_0.detach() + self.b_1.detach()),
             self.weight,
             self.bias,
-            (self.weight.detach()),
-            (self.w_1.detach())
+            0.5 * (self.weight.detach()),
+            0.5 * (self.w_1.detach())
         )
         
         return x

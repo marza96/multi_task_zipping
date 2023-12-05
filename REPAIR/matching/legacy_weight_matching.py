@@ -32,13 +32,6 @@ def mlp_permutation_spec(num_hidden_layers: int, bias_flg: bool) -> PermutationS
     assert num_hidden_layers >= 1
 
     if bias_flg:
-        print({"layers.0.weight": ("P_0", None),
-            **{f"layers.{2*i}.weight": (f"P_{i}", f"P_{i - 1}")
-               for i in range(1, num_hidden_layers)},
-            **{f"layers.{2*i}.bias": (f"P_{i}",)
-               for i in range(num_hidden_layers)},
-            f"layer{2 * num_hidden_layers}.weight": (None, f"P_{num_hidden_layers - 1}"),
-            f"layer{2 * num_hidden_layers}.bias": (None,)})
         return permutation_spec_from_axes_to_perm({
             "layers.0.weight": ("P_0", None),
             **{f"layers.{2*i}.weight": (f"P_{i}", f"P_{i - 1}")
@@ -149,8 +142,6 @@ def weight_matching_ref(ps, params_a, params_b, max_iter=300, debug_perms=None, 
     params_a = {key: params_a[key].to(device) for key in params_a}  # to device
     params_b = {key: params_b[key].to(device) for key in params_b}  # to device
 
-    # IF used in my framework then uncomment this
-
     if legacy is True:
         return perm, final_perm
     
@@ -178,7 +169,7 @@ def clone(x):
         ret[key] = x[key].clone().detach()
     return ret
 
-def wm_learning(model_a, model_b, train_loader, permutation_spec, device, dbg_perm=None):
+def wm_learning(model_a, model_b, train_loader, permutation_spec, device, epochs=10, dbg_perm=None):
     from torch.nn.utils.stateless import functional_call
     import torchopt
 
@@ -192,12 +183,12 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, dbg_pe
     for key in train_state:
         train_state[key] = train_state[key].float()
 
-    for epoch in tqdm(range(0, 20)):
+    for epoch in tqdm.tqdm(range(0, epochs)):
         correct = 0.
         loss_acum = 0.0
         total = 0
 
-        for i, (x, t) in enumerate(tqdm(train_loader, leave=False)):
+        for i, (x, t) in enumerate(tqdm.tqdm(train_loader, leave=False)):
             x = x.to(device)
             t = t.to(device)
 
@@ -229,7 +220,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, dbg_pe
             loss.backward()
 
             for key in train_state.keys():
-                new_param = train_state[key].detach() - 0.005 * train_state[key].grad.detach()
+                new_param = train_state[key].detach() - 0.05 * train_state[key].grad.detach()
                 train_state[key].data = new_param.detach()
 
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
