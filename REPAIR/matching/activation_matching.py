@@ -15,12 +15,10 @@ class ActivationMatching:
     def __call__(self, layer_indices, net0, net1, device="cuda"):
         permutations = list()
 
-        for _, layer_idx in enumerate(layer_indices):
+        for _, layer_idx in enumerate(layer_indices[:-1]):
             obj = self.corr_matrix(
                 net0.subnet(net0, layer_i=layer_idx), 
                 net1.subnet(net1, layer_i=layer_idx), 
-                epochs=self.epochs, 
-                loader=self.loader, 
                 device=device
             )
 
@@ -31,7 +29,7 @@ class ActivationMatching:
         
         net1 = apply_permutation(layer_indices, net1, permutations)
 
-        return permutations
+        return net0, net1
     
     def corr_matrix(self, net0, net1, device=None):
         n = self.epochs * len(self.loader)
@@ -41,7 +39,7 @@ class ActivationMatching:
             net1.eval()
 
             for _ in range(self.epochs):
-                for i, (images, _) in enumerate(tqdm(self.loader)):
+                for i, (images, _) in enumerate(tqdm.tqdm(self.loader)):
                     img_t = images.float().to(device)
                     out0 = net0(img_t)
                     out0 = out0.reshape(out0.shape[0], out0.shape[1], -1).permute(0, 2, 1)

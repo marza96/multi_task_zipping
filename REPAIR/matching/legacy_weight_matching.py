@@ -3,8 +3,10 @@ import scipy
 import copy
 import tqdm
 
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from collections import defaultdict, OrderedDict
+
+from .matching_utils import apply_permutation, permmat_to_perm
 
 
 '''
@@ -73,7 +75,7 @@ def get_permuted_param(ps, perm, k: str, params, except_axis=None):
     return w
 
 
-def apply_permutation(ps, perm, params):
+def apply_permutation_legacy(ps, perm, params):
     """Apply a `perm` to `params`."""
     ret = {}
     for k in params.keys():
@@ -126,7 +128,7 @@ def weight_matching_ref(ps, params_a, params_b, max_iter=300, debug_perms=None, 
             progress = progress or newL > oldL + 1e-12
 
             perm[p] = torch.Tensor(ci)
-            p_params_b = apply_permutation(ps, perm, params_b)
+            p_params_b = apply_permutation_legacy(ps, perm, params_b)
             # l2_dist = get_l2(params_a, p_params_b)
             # metrics['step'].append(step)
             # metrics['l2_dist'].append(l2_dist)
@@ -169,7 +171,7 @@ def clone(x):
         ret[key] = x[key].clone().detach()
     return ret
 
-def wm_learning(model_a, model_b, train_loader, permutation_spec, device, epochs=10, dbg_perm=None):
+def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, epochs=10, dbg_perm=None):
     from torch.nn.utils.stateless import functional_call
     import torchopt
 
@@ -197,14 +199,13 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, epochs
                                         train_state, flatten_params(model_b),
                                         max_iter=100, debug_perms=dbg_perm, init_perm=perm)
 
-            projected_params = apply_permutation(permutation_spec, perm, flatten_params(model_b))
+            projected_params = apply_permutation_legacy(permutation_spec, perm, flatten_params(model_b))
             
             # ste
             for key in train_state:
                 train_state[key] = train_state[key].detach()  # leaf
                 train_state[key].requires_grad = True
                 train_state[key].grad = None  # optimizer.zero_grad()
-
 
             # straight-through-estimator https://github.com/samuela/git-re-basin/blob/main/src/mnist_mlp_ste2.py#L178
             ste_params = {}
@@ -218,9 +219,9 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, epochs
             output = functional_call(model_target, midpoint_params, x)
             loss = torch.nn.functional.cross_entropy(output, t)
             loss.backward()
-
+            
             for key in train_state.keys():
-                new_param = train_state[key].detach() - 0.05 * train_state[key].grad.detach()
+                new_param = train_state[key].detach() -  lr * train_state[key].grad.detach()
                 train_state[key].data = new_param.detach()
 
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
@@ -241,3 +242,32 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, epochs
         final_perm[int(idx)] = best_perm[key].long()
 
     return final_perm
+
+
+class LegacyWeightMatching:
+    def __init__(self, num_layers, max_iter=1000, net_type="mlp", device="cpu"):
+        self.ps       = None
+        self.device   = device
+        self.max_iter = max_iter
+        if net_type == "mlp":
+            self.ps = mlp_permutation_spec(num_layers, True)
+
+    def __call__(self, cl0, cl1) -> Any:
+        dct0 = copy.deepcopy(cl0.cpu().state_dict())
+        dct1 = copy.deepcopy(cl1.cpu().state_dict())
+
+        perms, _ = weight_matching_ref(
+            self.ps, 
+            dct0, 
+            dct1, 
+            max_iter=self.max_iter, 
+            legacy=False
+        )
+
+        self.permutations =  self.permutations + [permmat_to_perm(torch.eye(128))]
+        cl1 = apply_permutation(self.layer_indices, cl1, self.permutations, device)
+        
+        return cl0.to(self.device), cl1.to(self.device)
+
+       
+        

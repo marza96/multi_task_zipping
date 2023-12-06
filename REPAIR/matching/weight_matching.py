@@ -70,32 +70,32 @@ class WeightMatching():
 
             if ste is True:
                 weights0 = [
-                    net0.layers[layer_i].layer_hat.weight.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net0.layers[layer_i].layer_hat.weight.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 weights1 = [
-                    net1.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net1.layers[layer_i].weight.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 biases0 = [
-                    net0.layers[layer_i].layer_hat.bias.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net0.layers[layer_i].layer_hat.bias.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 biases1 = [
-                    net1.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net1.layers[layer_i].bias.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 l_types = [
                     type(net1.layers[layer_i]) for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
             else:
                 weights0 = [
-                    net0.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net0.layers[layer_i].weight.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 weights1 = [
-                    net1.layers[layer_i].weight.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net1.layers[layer_i].weight.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 biases0 = [
-                    net0.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net0.layers[layer_i].bias.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 biases1 = [
-                    net1.layers[layer_i].bias.clone().cpu() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net1.layers[layer_i].bias.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 l_types = [
                     type(net1.layers[layer_i]) for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1

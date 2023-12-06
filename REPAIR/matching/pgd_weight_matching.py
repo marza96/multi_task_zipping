@@ -34,6 +34,46 @@ class PGDMatching:
             w = model1_new.layers[layer_idx].weight.clone()
             b = model1_new.layers[layer_idx].bias.clone()
 
+            # if idx == 0:
+            #     p_in = torch.arange(w.shape[1]).long()
+            #     p_in.to(device)
+            # elif idx > 0:
+            #     p_in = perms[idx - 1]
+            #     p_in.to(device)
+
+            # if idx < len(perms):
+            #     p_out = perms[idx]
+            #     p_out.to(device)
+            # else:
+            #     p_out = torch.arange(w.shape[0])
+            #     p_out.to(device)
+
+            # w = w[p_out, :]
+            # w = w[:, p_in]
+            # b = b[p_out] 
+
+            model1_new.layers[layer_idx].weight.data = w
+            model1_new.layers[layer_idx].bias.data = b
+
+            w_0 = model0.layers[layer_idx].weight.data.to(device).detach().clone()
+            b_0 = model0.layers[layer_idx].bias.data.to(device).detach().clone()
+
+            model.layers[layer_idx].weight.data = alpha * w + (1.0 - alpha) * w_0
+            model.layers[layer_idx].bias.data = alpha * b + (1.0 - alpha) * b_0
+
+        return model
+    
+
+    def apply_permutation(self, layer_indices, net, perms, device):
+        net = copy.deepcopy(net.cpu()).to(device)
+
+        p_in  = None
+        p_out = None
+
+        for idx, layer_idx in enumerate(layer_indices):
+            w = net.layers[layer_idx].weight.clone()
+            b = net.layers[layer_idx].bias.clone()
+
             if idx == 0:
                 p_in = torch.arange(w.shape[1]).long()
                 p_in.to(device)
@@ -52,16 +92,10 @@ class PGDMatching:
             w = w[:, p_in]
             b = b[p_out] 
 
-            model1_new.layers[layer_idx].weight.data = w
-            model1_new.layers[layer_idx].bias.data = b
+            net.layers[layer_idx].weight.data = w
+            net.layers[layer_idx].bias.data = b
 
-            w_0 = model0.layers[layer_idx].weight.data.to(device)
-            b_0 = model0.layers[layer_idx].bias.data.to(device)
-
-            model.layers[layer_idx].weight.data = alpha * w + (1.0 - alpha) * w_0
-            model.layers[layer_idx].bias.data = alpha * b + (1.0 - alpha) * b_0
-
-        return model, model1_new
+        return net.cpu()
     
     
     def learnable(self, layer_indices, net0, net1, debug_perms=None, init_perm=None):
@@ -70,6 +104,7 @@ class PGDMatching:
         net0 = copy.deepcopy(net0)
         netm = copy.deepcopy(net1)
         net1 = copy.deepcopy(net1)
+
 
         for _, param in net1.named_parameters():
             param.requires_grad = False
@@ -128,7 +163,7 @@ class PGDMatching:
 
             if iteration % 5 == 0:
                 perms = self.weight_matching(layer_indices, copy.deepcopy(netm), copy.deepcopy(net1), penalty=10000 * torch.eye(128))
-                net1 = apply_permutation(layer_indices, net1, perms)
+                net1 = apply_permutation(layer_indices, net1, perms, self.device)
                 netm = copy.deepcopy(net1)
 
                 cost = torch.zeros((1)).to(self.device)
@@ -152,6 +187,7 @@ class PGDMatching:
         net0       = copy.deepcopy(net0)
         netm       = copy.deepcopy(net1)
         net1       = copy.deepcopy(net1)
+        net1_init  = copy.deepcopy(net1)
 
         for i in range(len(layer_indices) - 1):
             perm_shape = net0.layers[layer_indices[i]].weight.shape[0]
@@ -173,31 +209,34 @@ class PGDMatching:
                 cost += torch.norm(netm.layers[layer_idx].weight - net0.layers[layer_idx].weight)
                 cost += torch.norm(netm.layers[layer_idx].bias - net0.layers[layer_idx].bias)
             
+            for layer_idx in layer_indices:
+                cost += 0.5 * torch.norm(netm.layers[layer_idx].weight - net1_init.layers[layer_idx].weight)
+                cost += 0.5 * torch.norm(netm.layers[layer_idx].bias - net1_init.layers[layer_idx].bias)
+
             gradient = torch.autograd.grad(cost, netm.parameters())
             
             for t, grad, n0 in zip(netm.named_parameters(), gradient, net0.parameters()):
                 param = t[1]
 
-                new_param = param.detach() - grad.detach().cpu()
+                new_param = param.detach() - self.lr * grad.detach().cpu()
                 param.data = new_param.detach()
            
             perms = self.weight_matching(layer_indices, copy.deepcopy(netm), copy.deepcopy(net1))
-            dummy = apply_permutation(layer_indices, net1, perms)
+            tent = apply_permutation(layer_indices, net1, perms, "cpu")
 
-            cost = torch.zeros((1))
+            cost1 = torch.zeros((1))
             for layer_idx in layer_indices:
-                cost += torch.norm(dummy.layers[layer_idx].weight - net0.layers[layer_idx].weight)
-                cost += torch.norm(dummy.layers[layer_idx].bias - net0.layers[layer_idx].bias)
+                cost1 += torch.norm(tent.layers[layer_idx].weight - net0.layers[layer_idx].weight)
+                cost1 += torch.norm(tent.layers[layer_idx].bias - net0.layers[layer_idx].bias)
             
             cost2 = torch.zeros((1))
             for layer_idx in layer_indices:
                 cost2 += torch.norm(net1.layers[layer_idx].weight - net0.layers[layer_idx].weight)
                 cost2 += torch.norm(net1.layers[layer_idx].bias - net0.layers[layer_idx].bias)
             
-            if cost < cost2:
-                perms = self.weight_matching(layer_indices, copy.deepcopy(netm), copy.deepcopy(net1))
-                net1 = apply_permutation(layer_indices, net1, perms)
-                netm = copy.deepcopy(net1)
+            if cost1 < cost2:
+                net1 = tent
+                netm = copy.deepcopy(net1.cpu())
 
                 self.acumulate_perms(perms)
 
@@ -206,9 +245,9 @@ class PGDMatching:
                     cost += torch.norm(netm.layers[layer_idx].weight - net0.layers[layer_idx].weight)
                     cost += torch.norm(netm.layers[layer_idx].bias - net0.layers[layer_idx].bias)
 
-                costs.append(float(cost))
                 print("COST %d" % iteration, cost)
 
+        # TODO DEBUG AND VERIFY PERM ACCUMULATION
         if self.ret_perms is True:
             return [permmat_to_perm(perm) for perm in self.final_perm]
         

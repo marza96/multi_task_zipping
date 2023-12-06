@@ -6,31 +6,48 @@ from .weight_matching import WeightMatching
 from .matching_utils import apply_permutation
 
 
-class STEFunc(torch.autograd.Function):
+class ConvSTEFunc(torch.autograd.Function):
     @staticmethod
-    def forward(input, w_for, b_for, w_hat, b_hat, w_hat_d, w_1):
-        a = input.mm(w_for.detach().t()) + b_for.detach()
+    def forward(input, w_for, b_for, w_hat, b_hat, w_back):
+        # TODO Implement
+        pass
 
+    @staticmethod
+    def setup_context(ctx, inputs, output):
+        # TODO Implement
+        pass
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # TODO Implement
+        pass
+
+
+class LinearSTEFunc(torch.autograd.Function):
+    @staticmethod
+    def forward(input, w_for, b_for, w_hat, b_hat, w_back):
+        a = input.mm(w_for.detach().t()) + b_for.detach()
+        
         return a 
 
     @staticmethod
     def setup_context(ctx, inputs, output):
-        input, w_for, b_for, w_hat, b_hat, w_hat_d, w_1 = inputs
-        ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_hat_d, w_1)
+        input, w_for, b_for, w_hat, b_hat, w_back = inputs
+        ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_back)
 
     @staticmethod
     def backward(ctx, grad_output):
-        input, w_for, b_for, w_hat, b_hat, w_hat_d, w_1 = ctx.saved_tensors
+        input, _, _, _, _, w_back = ctx.saved_tensors
         grad_input = grad_weight = grad_bias = None
+        
+        grad_bias   = (0.5 * grad_output).sum(0).detach()
+        grad_input  = torch.matmul(grad_output, w_back.detach())
+        grad_weight = torch.matmul(0.5 * grad_output.t(), input.detach()) 
 
-        grad_bias   = grad_output.sum(0) / 2.0
-        grad_input  = grad_output.mm(w_hat_d.detach()) + grad_output.mm(w_1.detach())
-        grad_weight = grad_output.t().mm(input.detach()) / 2.0
-
-        return grad_input, None, None, grad_weight, grad_bias, None, None
+        return grad_input, None, None, grad_weight, grad_bias, None
 
 
-class STE(torch.nn.Module):
+class STEAutograd(torch.nn.Module):
     def __init__(self, layer_0, layer_1, idx, perms):
         super().__init__()
         
@@ -78,16 +95,13 @@ class STE(torch.nn.Module):
         self.w_1 = self.w_1.clone()[:, p_in]
         self.b_1 = self.b_1.clone()[p_out]
 
-        # TODO INVESTIGATE NUMERIC DIFFERENCES BETEWEEN THIS
-        # AND THE REFERENCE IMPLEMENTATION
-        x = STEFunc.apply(
+        x = LinearSTEFunc.apply(
             x, 
             0.5 * (self.w_0.detach() + self.w_1.detach()),
             0.5 * (self.b_0.detach() + self.b_1.detach()),
             self.weight,
             self.bias,
-            0.5 * (self.weight.detach()),
-            0.5 * (self.w_1.detach())
+            0.5 * (self.w_0.detach() + self.w_1.detach()),
         )
         
         return x
@@ -109,6 +123,10 @@ class SteMatching:
         best_perm_loss = 1000.0
         best_perm      = None
         perms          = None
+
+        self.device = "cpu"
+        net0.to(self.device)
+        net1.to(self.device)
 
         netm = copy.deepcopy(net0)
         netm = self._wrap_network(layer_indices, net0.to(self.device), net1.to(self.device), copy.deepcopy(perms))
@@ -152,13 +170,13 @@ class SteMatching:
         return net0, net1
     
     def _wrap_network(self, layer_indices, net0, net1, perms):
-        wrapped_model = copy.deepcopy(net1)
+        wrapped_model = copy.deepcopy(net1.cpu())
 
         layers = list()
         for i, layer_idx in enumerate(layer_indices):
             layer0 = net0.layers[layer_idx]
             layer1 = net1.layers[layer_idx]
-            wrapper = STE
+            wrapper = STEAutograd
 
             lst = [
                     wrapper(layer0, layer1, i, perms), 

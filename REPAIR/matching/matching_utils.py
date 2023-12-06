@@ -5,9 +5,9 @@ import copy
 import numpy as np
 
 
-def apply_permutation(layer_indices, net, perms):
+def apply_permutation(layer_indices, net, perms, device=None):
     last_perm_map   = None
-    net             = copy.deepcopy(net)
+    net             = copy.deepcopy(net).to(device)
     last_perm_shape = net.layers[layer_indices[-1]].weight.shape[1]
     
     perms.append(permmat_to_perm(torch.eye(last_perm_shape)))
