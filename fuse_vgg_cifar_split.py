@@ -117,13 +117,13 @@ if __name__ == "__main__":
     fuse_cfg.names = {
         0: {
             "experiment_name": "fuse_mlp_cifar_split_AM",
-            "model0_name": "vgg_first_cifar_split",
-            "model1_name": "vgg_second_cifar_split"
+            "model0_name": "vgg_cifar_split_first",
+            "model1_name": "vgg_cifar_split_second"
         },
         1: {
             "experiment_name": "fuse_mlp_cifar_split_WM",
-            "model0_name": "vgg_first_cifar_split",
-            "model1_name": "vgg_second_cifar_split"
+            "model0_name": "vgg_cifar_split_first",
+            "model1_name": "vgg_cifar_split_second"
         }
     }
     
