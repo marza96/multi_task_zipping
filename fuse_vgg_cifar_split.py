@@ -90,7 +90,7 @@ if __name__ == "__main__":
             "match_method": ActivationMatching(
                 loaderc,
                 epochs=1,
-                device="mps"
+                device="cuda"
             ),
             "device": "cuda"
         },
