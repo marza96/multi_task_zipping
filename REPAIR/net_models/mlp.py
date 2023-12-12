@@ -16,11 +16,16 @@ class MLP(nn.Module):
             nn.Linear(28 * 28, channels, bias=True),
             nn.ReLU()
         ]
-        for _ in range(layers):
-            mid_layers.extend([
+        for i in range(layers):
+            lst  = [
                 nn.Linear(channels, channels, bias=True),
                 nn.ReLU(),
-            ])
+            ]
+            if i == self.num_layers - 1:
+                lst = [
+                    nn.Linear(channels, channels, bias=True),
+                ]
+            mid_layers.extend(lst)
             
         self.layers = nn.Sequential(*mid_layers)
         # self.classifier = nn.Linear(channels, classes)
@@ -144,6 +149,28 @@ class VGGSubnet(nn.Module):
 
     def forward(self, x):
         x = self.model.layers[:self.layer_i + 1](x)
+        
+        return x
+    
+
+class SigmaWrapper(nn.Module):
+    def __init__(self, layer):
+        super().__init__()
+        self.layer = layer
+        self.cov   = None
+
+    def get_stats(self):
+        assert self.cov is not None
+        
+        return self.cov
+    
+    def set_stats(self, mean, var):
+        self.bn.bias.data = mean
+        self.bn.weight.data = (var + 1e-7).sqrt()
+
+    def forward(self, x):
+        x = self.layer(x)
+        self.cov = torch.cov(x.T)
         
         return x
     

@@ -64,7 +64,7 @@ def get_datasets():
 if __name__ == "__main__":
     loader0, loader1, loaderc = get_datasets()
 
-    fuse_cfg = BaseFuseCfg(num_experiments=1, alpha_split=10)
+    fuse_cfg = BaseFuseCfg(num_experiments=2, alpha_split=10)
 
     vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
     fuse_cfg.models = {
@@ -76,16 +76,39 @@ if __name__ == "__main__":
                 "classes": 10,
             }
         },
+        1: {
+            "model": VGG,
+            "args": {
+                "w": 1,
+                "cfg": vgg_cfg,
+                "classes": 10,
+            }
+        },
     }
     fuse_cfg.configs = {
         0: {
-            "loss_fn": CrossEntropyLoss(),
-            "match_method": WeightMatching(),
-            "device": "cuda",
+            "match_method": ActivationMatching(
+                loaderc,
+                epochs=1,
+                device="mps"
+            ),
+            "device": "cuda"
         },
+        1: {
+            "match_method": WeightMatching(
+                epochs=1000,
+                debug=False
+            ),
+            "device": "cpu"
+        }
     }
     fuse_cfg.loaders = {
         0: {
+            "loader0": loader0,
+            "loader1": loader1,
+            "loaderc": loaderc,
+        },
+        1: {
             "loader0": loader0,
             "loader1": loader1,
             "loaderc": loaderc,
@@ -93,11 +116,17 @@ if __name__ == "__main__":
     }
     fuse_cfg.names = {
         0: {
-            "experiment_name": "fuse_vgg_cifar_split",
-            "model0_name": "vgg_first",
-            "model1_name": "vgg_second"
+            "experiment_name": "fuse_mlp_cifar_split_AM",
+            "model0_name": "vgg_first_cifar_split",
+            "model1_name": "vgg_second_cifar_split"
+        },
+        1: {
+            "experiment_name": "fuse_mlp_cifar_split_WM",
+            "model0_name": "vgg_first_cifar_split",
+            "model1_name": "vgg_second_cifar_split"
         }
     }
+    
     fuse_cfg.root_path = os.path.dirname(__file__)
 
     fuse_from_cfg(fuse_cfg)

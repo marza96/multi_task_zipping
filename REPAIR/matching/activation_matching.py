@@ -6,20 +6,20 @@ from .matching_utils import solve_lap, apply_permutation
 
 
 class ActivationMatching:
-    def __init__(self, loader, ret_perm=False, debug=False, epochs=1) -> None:
+    def __init__(self, loader, ret_perm=False, debug=False, epochs=1, device="cpu") -> None:
         self.debug    = debug
         self.loader   = loader
         self.epochs   = epochs
         self.ret_perm = ret_perm
+        self.device   = device
 
-    def __call__(self, layer_indices, net0, net1, device="cuda"):
+    def __call__(self, layer_indices, net0, net1):
         permutations = list()
 
         for _, layer_idx in enumerate(layer_indices[:-1]):
             obj = self.corr_matrix(
                 net0.subnet(net0, layer_i=layer_idx), 
                 net1.subnet(net1, layer_i=layer_idx), 
-                device=device
             )
 
             permutations.append(solve_lap(obj))
@@ -31,7 +31,7 @@ class ActivationMatching:
 
         return net0, net1
     
-    def corr_matrix(self, net0, net1, device=None):
+    def corr_matrix(self, net0, net1):
         n = self.epochs * len(self.loader)
         mean0 = mean1 = std0 = std1 = outer = None
         with torch.no_grad():
@@ -40,7 +40,8 @@ class ActivationMatching:
 
             for _ in range(self.epochs):
                 for i, (images, _) in enumerate(tqdm.tqdm(self.loader)):
-                    img_t = images.float().to(device)
+                    img_t = images.float().to(self.device)
+
                     out0 = net0(img_t)
                     out0 = out0.reshape(out0.shape[0], out0.shape[1], -1).permute(0, 2, 1)
                     out0 = out0.reshape(-1, out0.shape[2]).float()

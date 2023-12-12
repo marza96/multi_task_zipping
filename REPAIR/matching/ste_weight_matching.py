@@ -143,7 +143,7 @@ class SteMatching:
                 self._reset_network(layer_indices, netm, net1.to(self.device), copy.deepcopy(perms), zero_grad=True)
 
                 outputs = netm(images)
-                loss = torch.nn.functional.cross_entropy(outputs, labels)
+                loss = self.loss_fn(outputs, labels)
                 gradient = torch.autograd.grad(loss, netm.parameters())
 
                 for t, grad in zip(netm.named_parameters(), gradient):
