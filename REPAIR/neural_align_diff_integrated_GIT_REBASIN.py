@@ -4,12 +4,6 @@ import tqdm
 import torch.nn as nn
 
 from .net_models.mlp import LayerWrapper, LayerWrapper2D, SigmaWrapper
-from .matching.weight_matching import WeightMatching
-from .matching.weight_matching_sigma import WeightMatchingSigma
-from .matching.activation_matching import ActivationMatching
-from .matching.ste_weight_matching import SteMatching
-from .matching.pgd_weight_matching import PGDMatching
-from .matching.legacy_weight_matching import mlp_permutation_spec, wm_learning, weight_matching_ref
 
 torch.set_printoptions(precision=4, sci_mode=False)
 

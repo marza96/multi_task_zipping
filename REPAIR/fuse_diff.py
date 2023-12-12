@@ -31,7 +31,7 @@ def plot_stuff(x, y, x_label, y_label, legend, path):
 
 
 def fuse_from_cfg(train_cfg, debug=True):
-    for i in range(train_cfg.num_experiments):
+    for i in range(0, train_cfg.num_experiments):
         model_cls      = train_cfg.models[i]["model"]
         model_args     = train_cfg.models[i]["args"]
         loader0        = train_cfg.loaders[i]["loader0"]
@@ -40,7 +40,6 @@ def fuse_from_cfg(train_cfg, debug=True):
         exp_name       = train_cfg.names[i]["experiment_name"]
         model0_name    = train_cfg.names[i]["model0_name"]
         model1_name    = train_cfg.names[i]["model1_name"]
-        loss_fn        = train_cfg.configs[i]["loss_fn"]
         device         = train_cfg.configs[i]["device"]
         match_method   = train_cfg.configs[i]["match_method"]
         root_path      = train_cfg.root_path
@@ -56,79 +55,88 @@ def fuse_from_cfg(train_cfg, debug=True):
         os.makedirs(root_path + '/plots/%s' % exp_name, exist_ok=True)
 
         neural_align_ = NeuralAlignDiff(model_cls, match_method, loader0, loader1, loaderc)
-        permute_and_rescale_acc   = list()
-        permute_acc   = list()
-        plain_acc     = list()
-
-        model0_ = copy.deepcopy(model0)
-        model1_ = copy.deepcopy(model1)
-        modela  = neural_align_.fuse_networks(model_args, model0_, model1_, 0.5, device=device, new_stats=True, permute=True).to(device)
-        acc     = evaluate_acc_single_head(modela, loader=loaderc, device=device)
-        print("Fused model accuracy: %f", acc)
-
-        save_model(modela, root_path + '/pt_models/%s.pt' % exp_name)
-        print("Saved fused model under %s" % (root_path + '/pt_models/%s.pt' % exp_name))
-
-        if debug is False:
-            return
         
-        for i in tqdm.tqdm(range(alpha_split)):
-            model0_ = copy.deepcopy(model0)
-            model1_ = copy.deepcopy(model1)
+        modela  = neural_align_.fuse_networks(model_args, model0, model1, 0.5, device=device, new_stats=True, permute=True).to(device)
+        acc     = evaluate_acc_single_head(modela.to(device), loader=loaderc, device=device)
+        print("ITER %d Fused model accuracy: %f" %(i, acc))
 
-            modela = neural_align_.fuse_networks(model_args, model0_, model1_, i / 10.0, device=device, new_stats=False, permute=False).to(device)
+        # print("DBG", device)
+        # accuracies = list()
+        # for i in range(40):
+        #     model0_ = copy.deepcopy(model0).to(device)
+        #     model1_ = copy.deepcopy(model1).to(device)
+        #     modela  = neural_align_.fuse_networks(model_args, model0_, model1_, 0.5, device=device, new_stats=True, permute=True).to(device)
+        #     acc     = evaluate_acc_single_head(modela.to(device), loader=loaderc, device=device)
+        #     accuracies.append(acc)
+        #     print("ITER %d Fused model accuracy: %f" %(i, acc))
+        #     break
+        # print(np.array(accuracies).mean(), np.array(accuracies).std())
+        # np.save(np.array(accuracies), "pgd_acc.npy")
+        # return
 
-            plain_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
-            if i == alpha_split / 2:
-                print("plain acc: ", plain_acc[-1])
+        # permute_and_rescale_acc   = list()
+        # permute_acc   = list()
+        # plain_acc     = list()
+        
+        # print("EXP %s" % exp_name)
+        # for i in tqdm.tqdm(range(alpha_split)):
+        #     model0_ = copy.deepcopy(model0)
+        #     model1_ = copy.deepcopy(model1)
 
-        plt.figure()
+        #     modela = neural_align_.fuse_networks(model_args, model0_, model1_, i / 10.0, device=device, new_stats=True, permute=True).to(device)
 
-        plot_stuff(
-            np.linspace(0, 1.0, alpha_split), 
-            plain_acc, 
-            "alpha", 
-            "acc", 
-            ["plain fusion"], 
-            root_path + '/plots/%s/plain.png' % exp_name
-        )
+        #     plain_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
+        #     if i == alpha_split / 2:
+        #         print("plain acc: ", plain_acc[-1])
 
-        for i in tqdm.tqdm(range(alpha_split)):
-            model0_ = copy.deepcopy(model0)
-            model1_ = copy.deepcopy(model1)
+        # np.save(root_path + '/plots/%s/am.npy' % exp_name, np.array(plain_acc))
+        # plt.figure()
 
-            modela = neural_align_.fuse_networks(model_args, model0_, model1_, i / 10.0, device=device, new_stats=False, permute=True).to(device)
+        # plot_stuff(
+        #     np.linspace(0, 1.0, alpha_split), 
+        #     plain_acc, 
+        #     "alpha", 
+        #     "acc", 
+        #     ["plain fusion"], 
+        #     root_path + '/plots/%s/am.png' % exp_name
+        # )
 
-            permute_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
+        # for i in tqdm.tqdm(range(alpha_split)):
+        #     model0_ = copy.deepcopy(model0)
+        #     model1_ = copy.deepcopy(model1)
 
-            if i == alpha_split / 2:
-                print("permute acc: ", permute_acc[-1])
+        #     modela = neural_align_.fuse_networks(model_args, model0_, model1_, i / 10.0, device=device, new_stats=False, permute=True).to(device)
 
-        plot_stuff(
-            np.linspace(0, 1.0, alpha_split), 
-            permute_acc,
-            "alpha",
-            "acc",
-            ["plain fusion", "permuted fusion"],
-            root_path + '/plots/%s/permute.png' % exp_name
-        )
+        #     permute_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
 
-        for i in tqdm.tqdm(range(alpha_split)):
-            model0_ = copy.deepcopy(model0)
-            model1_ = copy.deepcopy(model1)
+        #     if i == alpha_split / 2:
+        #         print("permute acc: ", permute_acc[-1])
 
-            modela = neural_align_.fuse_networks(model_args, model0_, model1_, i / 10.0, device=device, new_stats=True, permute=True).to(device)
+        # plot_stuff(
+        #     np.linspace(0, 1.0, alpha_split), 
+        #     permute_acc,
+        #     "alpha",
+        #     "acc",
+        #     ["plain fusion", "permuted fusion"],
+        #     root_path + '/plots/%s/permute.png' % exp_name
+        # )
 
-            permute_and_rescale_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
+        # for i in tqdm.tqdm(range(alpha_split)):
+        #     model0_ = copy.deepcopy(model0)
+        #     model1_ = copy.deepcopy(model1)
 
-            if i == alpha_split / 2:
-                print("permute_and_scale acc: ", permute_and_rescale_acc[-1])
+        #     modela = neural_align_.fuse_networks(model_args, model0_, model1_, i / 10.0, device=device, new_stats=True, permute=True).to(device)
 
-        plot_stuff(
-            np.linspace(0, 1.0, alpha_split), 
-            permute_and_rescale_acc,
-            "alpha",
-            "acc",
-            ["plain fusion", "permuted fusion", "REPAIR fusion"],
-            root_path + '/plots/%s/repair.png' % exp_name
-        )
+        #     permute_and_rescale_acc.append(evaluate_acc_single_head(modela, loader=loaderc, device=device))
+
+        #     if i == alpha_split / 2:
+        #         print("permute_and_scale acc: ", permute_and_rescale_acc[-1])
+
+        # plot_stuff(
+        #     np.linspace(0, 1.0, alpha_split), 
+        #     permute_and_rescale_acc,
+        #     "alpha",
+        #     "acc",
+        #     ["plain fusion", "permuted fusion", "REPAIR fusion"],
+        #     root_path + '/plots/%s/repair.png' % exp_name
+        # )
