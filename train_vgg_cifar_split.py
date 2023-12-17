@@ -79,7 +79,7 @@ if __name__ == "__main__":
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 40,
+            "epochs" : 50,
             "device": "cuda",
             "optimizer": {
                 "class": SGD,

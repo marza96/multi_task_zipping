@@ -44,12 +44,13 @@ def permmat_to_perm(permmat):
     return perm
 
 
-def solve_lap(corr_mtx):
+def solve_lap(corr_mtx, maximize=True):
     corr_mtx_a = corr_mtx.cpu().numpy()
-    row_ind, col_ind = scipy.optimize.linear_sum_assignment(corr_mtx_a, maximize=True)
+    row_ind, col_ind = scipy.optimize.linear_sum_assignment(corr_mtx_a, maximize=maximize)
 
     assert (row_ind == np.arange(len(corr_mtx_a))).all()
 
     perm_map = torch.tensor(col_ind).long()
 
     return perm_map
+

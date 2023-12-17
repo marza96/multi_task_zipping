@@ -24,8 +24,6 @@ def evaluate_acc_single_head(model, loader=None, device=None, stop=10e6):
             unique_labels += unique
 
             unique_labels = np.unique(unique_labels).tolist()
-            # print(unique_labels)
-            # print(np.all(np.isin(np.arange(10), unique_labels)))
 
             if total > stop:
                 break
@@ -66,8 +64,6 @@ def evaluate_acc(model, loader=None, device=None, stop=10e6):
             unique_labels += unique
 
             unique_labels = np.unique(unique_labels).tolist()
-            print(unique_labels)
-            print(np.all(np.isin(np.arange(10), unique_labels)))
 
             if total > stop:
                 break

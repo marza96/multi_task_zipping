@@ -84,7 +84,6 @@ class VGG(nn.Module):
         self.layers      = self._make_layers(cfg)
         self.classes     = classes
         self.subnet      = VGGSubnet
-        self.classifier  = nn.Linear(self.w * cfg[-2], classes)
 
     def forward(self, x):
         out = self.layers(x)
@@ -106,6 +105,7 @@ class VGG(nn.Module):
                 in_channels = x
 
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
+        layers += [nn.Linear(self.w * cfg[-2], self.classes)]
 
         return nn.Sequential(*layers)
 
@@ -153,25 +153,31 @@ class VGGSubnet(nn.Module):
         return x
     
 
-class SigmaWrapper(nn.Module):
+class SigmaWrapper(torch.nn.Module):
     def __init__(self, layer):
         super().__init__()
         self.layer = layer
-        self.cov   = None
+        self.hess  = None
+        self.cnt   = None
 
     def get_stats(self):
-        assert self.cov is not None
+        assert self.hess is not None
         
-        return self.cov
-    
-    def set_stats(self, mean, var):
-        self.bn.bias.data = mean
-        self.bn.weight.data = (var + 1e-7).sqrt()
+        return self.hess / self.cnt
 
     def forward(self, x):
+        hess = torch.multiply(x.unsqueeze(-1), x.unsqueeze(1)).sum(0)
+        hess += torch.eye(hess.shape[0]).to(x.device) * 0.0001
+
+        if self.hess is None:
+            self.cnt  = 0
+            self.hess = torch.zeros_like(hess)
+
+        self.hess += hess
+        self.cnt += x.shape[0]
+
         x = self.layer(x)
-        self.cov = torch.cov(x.T)
-        
+
         return x
     
 
@@ -190,7 +196,7 @@ class LayerWrapper(nn.Module):
     
     def set_stats(self, mean, var):
         self.bn.bias.data = mean
-        self.bn.weight.data = (var + 1e-7).sqrt()
+        self.bn.weight.data = (var + 1e-4).sqrt()
 
     def forward(self, x):
         x = self.layer(x)

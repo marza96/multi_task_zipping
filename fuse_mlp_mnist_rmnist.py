@@ -13,6 +13,12 @@ from REPAIR.matching.weight_matching import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
 from REPAIR.matching.ste_weight_matching import SteMatching
 
+from torchvision.transforms.functional import rotate
+
+
+def rot_img(tensor):
+    return rotate(tensor, 90.0)
+
 
 def get_datasets():
     path   = os.path.dirname(__file__)
@@ -29,11 +35,16 @@ def get_datasets():
         transform=transform
     )
 
-    fashMnistTrainSet = torchvision.datasets.FashionMNIST(
+    fashMnistTrainSet = torchvision.datasets.MNIST(
         root=path + '/data', 
         train=True,
         download=True, 
-        transform=transform
+        transform=transforms.Compose(
+        [
+            transforms.ToTensor(),
+            rot_img
+        ]
+        )
     )
 
     first_half = [
@@ -50,19 +61,19 @@ def get_datasets():
         torch.utils.data.Subset(fashMnistTrainSet, first_half),
         batch_size=128,
         shuffle=False,
-        num_workers=8)
+        num_workers=1)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
         batch_size=128,
         shuffle=False,
-        num_workers=8)
+        num_workers=1)
     
     ConcatLoader = torch.utils.data.DataLoader(
         ConcatDataset((torch.utils.data.Subset(fashMnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
-        batch_size=1024,
+        batch_size=128,
         shuffle=False, 
-        num_workers=8
+        num_workers=1
     )
     
     return FirstHalfLoader, SecondHalfLoader, ConcatLoader
@@ -149,23 +160,21 @@ if __name__ == "__main__":
     }
     fuse_cfg.names = {
         0: {
-            "experiment_name": "fuse_mlp_mnist_fmnist_AM",
-            "model0_name": "mlp_first_mnist_fmnist",
-            "model1_name": "mlp_second_mnist_fmnist"
+            "experiment_name": "fuse_mlp_mnist_rmnist",
+            "model0_name": "mlp_first_mnist_rmnist",
+            "model1_name": "mlp_second_mnist_rmnist"
         },
         1: {
-            "experiment_name": "fuse_mlp_mnist_fmnist_WM",
-            "model0_name": "mlp_first_mnist_fmnist",
-            "model1_name": "mlp_second_fmnist"
-        }
-        ,
+            "experiment_name": "fuse_mlp_mnist_rmnist",
+            "model0_name": "mlp_first_mnist_rmnist",
+            "model1_name": "mlp_second_mnist_rmnist"
+        },
         2: {
-            "experiment_name": "fuse_mlp_mnist_fmnist_STE",
-            "model0_name": "mlp_first_mnist_fmnist",
-            "model1_name": "mlp_second_mnist_fmnist"
+            "experiment_name": "fuse_mlp_mnist_rmnist",
+            "model0_name": "mlp_first_mnist_rmnist",
+            "model1_name": "mlp_second_mnist_rmnist"
         }
     }
-    
     fuse_cfg.root_path = os.path.dirname(__file__)
 
     fuse_from_cfg(fuse_cfg)

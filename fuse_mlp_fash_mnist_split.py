@@ -22,14 +22,7 @@ def get_datasets():
             transforms.ToTensor(),
         ]
     )
-    mnistTrainSet = torchvision.datasets.MNIST(
-        root=path + '/data', 
-        train=True,
-        download=True, 
-        transform=transform
-    )
-
-    fashMnistTrainSet = torchvision.datasets.FashionMNIST(
+    mnistTrainSet = torchvision.datasets.FashionMNIST(
         root=path + '/data', 
         train=True,
         download=True, 
@@ -37,31 +30,31 @@ def get_datasets():
     )
 
     first_half = [
-        idx for idx, target in enumerate(fashMnistTrainSet.targets) 
-        if target in [5, 6, 7, 8, 9]
+        idx for idx, target in enumerate(mnistTrainSet.targets) 
+        if target in [0, 1, 2, 3, 4]
     ]
 
     second_half = [
         idx for idx, target in enumerate(mnistTrainSet.targets) 
-        if target in [0, 1, 2, 3, 4]
+        if target in [5, 6, 7, 8, 9]
     ]  
 
     FirstHalfLoader = torch.utils.data.DataLoader(
-        torch.utils.data.Subset(fashMnistTrainSet, first_half),
-        batch_size=128,
-        shuffle=False,
+        torch.utils.data.Subset(mnistTrainSet, first_half),
+        batch_size=512,
+        shuffle=True,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=128,
-        shuffle=False,
+        batch_size=512,
+        shuffle=True,
         num_workers=8)
     
     ConcatLoader = torch.utils.data.DataLoader(
-        ConcatDataset((torch.utils.data.Subset(fashMnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
-        batch_size=1024,
-        shuffle=False, 
+        ConcatDataset((torch.utils.data.Subset(mnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
+        batch_size=512,
+        shuffle=True, 
         num_workers=8
     )
     
@@ -149,23 +142,22 @@ if __name__ == "__main__":
     }
     fuse_cfg.names = {
         0: {
-            "experiment_name": "fuse_mlp_mnist_fmnist_AM",
-            "model0_name": "mlp_first_mnist_fmnist",
-            "model1_name": "mlp_second_mnist_fmnist"
+            "experiment_name": "fuse_mlp_fash_mnist_split_AM",
+            "model0_name": "mlp_first_fmnist",
+            "model1_name": "mlp_second_fmnist"
         },
         1: {
-            "experiment_name": "fuse_mlp_mnist_fmnist_WM",
-            "model0_name": "mlp_first_mnist_fmnist",
+            "experiment_name": "fuse_mlp_fash_mnist_split_WM",
+            "model0_name": "mlp_first_fmnist",
             "model1_name": "mlp_second_fmnist"
         }
         ,
         2: {
-            "experiment_name": "fuse_mlp_mnist_fmnist_STE",
-            "model0_name": "mlp_first_mnist_fmnist",
-            "model1_name": "mlp_second_mnist_fmnist"
+            "experiment_name": "fuse_mlp_fash_mnist_split_STE",
+            "model0_name": "mlp_first_fmnist",
+            "model1_name": "mlp_second_fmnist"
         }
     }
-    
     fuse_cfg.root_path = os.path.dirname(__file__)
 
     fuse_from_cfg(fuse_cfg)

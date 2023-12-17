@@ -5,66 +5,6 @@ import copy
 from .matching_utils import perm_to_permmat, permmat_to_perm, solve_lap, apply_permutation
 
 
-def linear_objective(idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
-        obj = torch.zeros(
-            (weights0[idx].shape[0], weights0[idx].shape[0])
-        )
-
-        w0_i = weights0[idx].clone()
-        w1_i = weights1[idx].clone()
-
-        if isinstance(l_types[idx], torch.nn.Conv2d):
-            w0_i = w0_i.permute(2, 3, 0, 1)
-            w1_i = w1_i.permute(2, 3, 0, 1)
-
-        if biases0[idx] is not None:
-            obj += torch.outer(biases0[idx], biases1[idx])
-
-        if idx > 0:
-            obj += w0_i @ perm_mats[idx - 1] @ w1_i.T 
-
-        if idx == 0:
-            obj += w0_i @  w1_i.T 
-
-        if idx < len(weights0) - 1:
-            w0_ii = weights0[idx + 1].clone()
-            w1_ii = weights1[idx + 1].clone()
-
-            if isinstance(l_types[idx], torch.nn.Conv2d):
-                w0_ii = w0_ii.permute(2, 3, 0, 1)
-                w1_ii = w1_ii.permute(2, 3, 0, 1)
-
-            obj += w0_ii.T @ perm_mats[idx + 1] @ w1_ii
-        
-        return obj
-
-
-def conv2d_objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
-        obj = torch.zeros(
-            (weights0[idx].shape[0], weights0[idx].shape[0])
-        )
-
-        w0_i = w0_i.permute(2, 3, 0, 1)
-        w1_i = w1_i.permute(2, 3, 0, 1)
-
-        if biases0[idx] is not None:
-            obj += torch.outer(biases0[idx], biases1[idx])
-
-        if idx > 0:
-            obj += w0_i @ perm_mats[idx - 1] @ w1_i.T 
-
-        if idx == 0:
-            obj += w0_i @  w1_i.T 
-
-        if idx < len(weights0) - 1:
-            w0_ii = w0_ii.permute(2, 3, 0, 1)
-            w1_ii = w1_ii.permute(2, 3, 0, 1)
-
-            obj += w0_ii.T @ perm_mats[idx + 1] @ w1_ii
-        
-        return obj
-
-
 class WeightMatching():
     def __init__(self, debug=False, epochs=1, debug_perms=None, ret_perms=False):
         self.debug       = debug
@@ -72,17 +12,13 @@ class WeightMatching():
         self.debug_perms = debug_perms
         self.ret_perms   = ret_perms
 
-    def objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
+    def linear_objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
         obj = torch.zeros(
             (weights0[idx].shape[0], weights0[idx].shape[0])
         )
 
         w0_i = weights0[idx].clone()
         w1_i = weights1[idx].clone()
-
-        if isinstance(l_types[idx], torch.nn.Conv2d):
-            w0_i = w0_i.permute(2, 3, 0, 1)
-            w1_i = w1_i.permute(2, 3, 0, 1)
 
         if biases0[idx] is not None:
             obj += torch.outer(biases0[idx], biases1[idx])
@@ -97,13 +33,69 @@ class WeightMatching():
             w0_ii = weights0[idx + 1].clone()
             w1_ii = weights1[idx + 1].clone()
 
-            if isinstance(l_types[idx], torch.nn.Conv2d):
-                w0_ii = w0_ii.permute(2, 3, 0, 1)
-                w1_ii = w1_ii.permute(2, 3, 0, 1)
-
             obj += w0_ii.T @ perm_mats[idx + 1] @ w1_ii
         
         return obj
+
+
+    def conv2d_objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
+        kernel_shape = weights0[0].shape[2:]
+        obj          = torch.zeros(
+            (
+                *kernel_shape, 
+                weights0[idx].shape[0], 
+                weights0[idx].shape[0]
+            )
+        )
+
+        w0_i = weights0[idx].clone().permute(2, 3, 0, 1)
+        w1_i = weights1[idx].clone().permute(2, 3, 0, 1)
+
+        if biases0[idx] is not None:
+            obj += torch.outer(biases0[idx], biases1[idx])
+
+        if idx > 0:
+            p = torch.empty(
+                kernel_shape[0] * kernel_shape[1], 
+                *(perm_mats[idx - 1].shape)
+            )
+
+            for i in range(kernel_shape[0] * kernel_shape[1]):
+                p[i, :, :] = perm_mats[idx - 1].clone()
+
+            p = p.reshape(*kernel_shape, *(p.shape[1:]))
+
+            obj += w0_i @ p @ w1_i.permute(0, 1, 3, 2) 
+
+        if idx == 0:
+            obj += w0_i @ w1_i.permute(0, 1, 3, 2)
+
+        if idx < len(weights0) - 1:
+            w0_ii = weights0[idx + 1].clone().permute(2, 3, 0, 1)
+            w1_ii = weights1[idx + 1].clone().permute(2, 3, 0, 1)
+
+            p = torch.empty(
+                kernel_shape[0] * kernel_shape[1], 
+                *(perm_mats[idx + 1].shape)
+            )
+            
+            for i in range(kernel_shape[0] * kernel_shape[1]):
+                p[i, :, :] = perm_mats[idx + 1].clone()
+
+            p = p.reshape(*kernel_shape, *(p.shape[1:]))
+
+            obj += w0_ii.permute(0, 1, 3, 2) @ p @ w1_ii
+        
+        return obj.sum(0).sum(0)
+
+    def objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
+        if isinstance(l_types[idx], torch.nn.Linear):
+            return self.linear_objective(
+                idx, perm_mats, weights0, weights1, biases0, biases1, l_types)
+
+        if isinstance(l_types[idx], torch.nn.Conv2d):
+            return self.conv2d_objective(
+                idx, perm_mats, weights0, weights1, biases0, biases1, l_types)
     
     def apply_permutation(self, layer_indices, net, perms):
         last_perm_map = None
@@ -145,7 +137,7 @@ class WeightMatching():
                     net1.layers[layer_i].bias.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 l_types = [
-                    type(net1.layers[layer_i]) for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net1.layers[layer_i] for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
             else:
                 weights0 = [
@@ -161,7 +153,7 @@ class WeightMatching():
                     net1.layers[layer_i].bias.clone().cpu().float() for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
                 l_types = [
-                    type(net1.layers[layer_i]) for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
+                    net1.layers[layer_i] for i, layer_i in enumerate(layer_indices) #if i < len(layer_indices) - 1
                 ]
 
             perm_mats = [None for _ in range(len(weights0))]
@@ -203,8 +195,6 @@ class WeightMatching():
                     if self.debug is True:
                         print(f"{iteration}/{i}: {newL - oldL}") 
 
-                # print(torch.trace(weights0[2] @ (perm_mats[2] @ weights1[2] @ perm_mats[1].T).T))
-                # print("--------")
                 if not progress:
                     break
             

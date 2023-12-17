@@ -37,12 +37,12 @@ def get_datasets():
 
     first_half = [
         idx for idx, target in enumerate(fashMnistTrainSet.targets) 
-        if target in [0, 1, 2, 3, 4]
+        if target in [5, 6, 7, 8, 9]
     ]
 
     second_half = [
         idx for idx, target in enumerate(mnistTrainSet.targets) 
-        if target in [5, 6, 7, 8, 9]
+        if target in [0, 1, 2, 3, 4]
     ]  
 
     FirstHalfLoader = torch.utils.data.DataLoader(
@@ -70,7 +70,7 @@ if __name__ == "__main__":
             "model": MLP,
             "args": {
                 "layers": 5,
-                "channels": 512,
+                "channels": 128,
                 "classes": 10,
             }
         },
@@ -78,7 +78,7 @@ if __name__ == "__main__":
             "model": MLP,
             "args": {
                 "layers": 5,
-                "channels": 512,
+                "channels": 128,
                 "classes": 10,
             }
         }
@@ -86,20 +86,20 @@ if __name__ == "__main__":
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 20,
-            "device": "cuda",
+            "epochs" : 25,
+            "device": "mps",
             "optimizer": {
                 "class": SGD,
                 "args": {
-                    "lr": 0.01,
+                    "lr": 0.05,
                     "momentum": 0.9
                 }
             }
         },
         1: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 20,
-            "device": "cuda",
+            "epochs": 17,
+            "device": "mps",
             "optimizer": {
                 "class": SGD,
                 "args": {
