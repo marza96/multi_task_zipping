@@ -6,11 +6,12 @@ from .matching_utils import perm_to_permmat, permmat_to_perm, solve_lap, apply_p
 
 
 class WeightMatching():
-    def __init__(self, debug=False, epochs=1, debug_perms=None, ret_perms=False):
+    def __init__(self, debug=False, epochs=1, debug_perms=None, ret_perms=False, device="cpu"):
         self.debug       = debug
         self.epochs      = epochs
         self.debug_perms = debug_perms
         self.ret_perms   = ret_perms
+        self.device      = device
 
     def linear_objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
         obj = torch.zeros(
@@ -71,8 +72,15 @@ class WeightMatching():
             obj += w0_i @ w1_i.permute(0, 1, 3, 2)
 
         if idx < len(weights0) - 1:
-            w0_ii = weights0[idx + 1].clone().permute(2, 3, 0, 1)
-            w1_ii = weights1[idx + 1].clone().permute(2, 3, 0, 1)
+            w0_ii = weights0[idx + 1].clone()
+            w1_ii = weights1[idx + 1].clone()
+
+            if len(w0_ii.shape) == 2:
+                w0_ii = w0_ii[:, :, None, None]
+                w1_ii = w1_ii[:, :, None, None]
+
+            w0_ii = w0_ii.permute(2, 3, 0, 1)
+            w1_ii = w1_ii.permute(2, 3, 0, 1)
 
             p = torch.empty(
                 kernel_shape[0] * kernel_shape[1], 
@@ -100,7 +108,8 @@ class WeightMatching():
     def apply_permutation(self, layer_indices, net, perms):
         last_perm_map = None
         net = copy.deepcopy(net)
-        perms =  perms + [permmat_to_perm(torch.eye(128))]
+        perms =  perms
+
         for i, layer_idx in enumerate(layer_indices):
             perm_map = perms[i]
             weight   = net.layers[layer_idx].weight
@@ -198,12 +207,13 @@ class WeightMatching():
                 if not progress:
                     break
             
-            final_perms = [permmat_to_perm(perm_mats[i].long()) for i in range(len(perm_mats))][:-1]
-            
+            final_perms = [permmat_to_perm(perm_mats[i].long()) for i in range(len(perm_mats))]
+
             if self.ret_perms is True:
                 return final_perms
             
-            net1 = apply_permutation(layer_indices, net1, final_perms)
+            final_perms += [permmat_to_perm(torch.eye(weights0[-1].shape[0]))]
+            net1 = self.apply_permutation(layer_indices, net1, final_perms)
             
-            return net0, net1
+            return net0.to(self.device), net1.to(self.device)
         

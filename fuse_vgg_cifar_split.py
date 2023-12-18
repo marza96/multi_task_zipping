@@ -12,6 +12,7 @@ from REPAIR.net_models.mlp import VGG
 from REPAIR.fuse_cfg import BaseFuseCfg
 from REPAIR.matching.weight_matching import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
+from REPAIR.matching.ste_weight_matching import SteMatching
 
 
 def get_datasets():
@@ -87,9 +88,15 @@ if __name__ == "__main__":
     }
     fuse_cfg.configs = {
         0: {
-            "match_method": ActivationMatching(
+            "match_method": SteMatching(
+                torch.nn.functional.cross_entropy,
                 loaderc,
-                epochs=1,
+                0.25,
+                WeightMatching(
+                    epochs=1000,
+                    ret_perms=True
+                ),
+                epochs=20,
                 device="cuda"
             ),
             "device": "cuda"

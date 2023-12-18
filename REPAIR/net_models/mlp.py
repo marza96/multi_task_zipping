@@ -81,14 +81,14 @@ class VGG(nn.Module):
 
         self.in_channels = in_channels
         self.w           = w
-        self.layers      = self._make_layers(cfg)
         self.classes     = classes
         self.subnet      = VGGSubnet
+        self.layers      = self._make_layers(cfg)
 
     def forward(self, x):
-        out = self.layers(x)
+        out = self.layers[:-1](x)
         out = out.view(out.size(0), -1)
-        out = self.classifier(out)
+        out = self.layers[-1](out)
         return out
 
     def _make_layers(self, cfg):
