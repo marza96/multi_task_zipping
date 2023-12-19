@@ -208,7 +208,7 @@ class WeightMatching():
                     break
             
             final_perms = [permmat_to_perm(perm_mats[i].long()) for i in range(len(perm_mats))]
-
+            
             if self.ret_perms is True:
                 return final_perms
             

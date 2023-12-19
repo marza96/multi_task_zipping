@@ -164,6 +164,22 @@ class SteMatching:
                 loss = self.loss_fn(outputs, labels)
                 gradient = torch.autograd.grad(loss, netm.parameters())
 
+                if self.debug is True:
+                    if i == 40: 
+                        print("iter %d ....................." % i)
+                        for t, grad in zip(netm.named_parameters(), gradient):
+                            name = t[0]
+                            param = t[1]
+
+                            if not "layers.4" in name:
+                                continue
+                            
+                            try:
+                                print("MY G", name, grad[:5, :5])
+                            except:
+                                print("MY G", name, grad[:5])
+                        print("......................................")
+
                 for t, grad in zip(netm.named_parameters(), gradient):
                     name = t[0]
                     param = t[1]
@@ -177,6 +193,13 @@ class SteMatching:
 
                 loss_acum += loss.mean()
                 total += 1
+
+                if self.debug is True:
+                    if i == 40:
+                        for p in perms:
+                            print(p[:11])
+
+                        return
 
             print("LOSS: %d" % iteration, loss_acum / total)
 
@@ -196,32 +219,7 @@ class SteMatching:
 
             wrapped_model.layers[layer_idx] = STEAutograd(layer0, layer1, i, perms)
 
-        return wrapped_model
-    
-    # def _wrap_network(self, layer_indices, net0, net1, perms):
-    #     wrapped_model = copy.deepcopy(net1.cpu())
-
-    #     layers = list()
-    #     for i, layer_idx in enumerate(layer_indices):
-    #         layer0 = net0.layers[layer_idx]
-    #         layer1 = net1.layers[layer_idx]
-    #         wrapper = STEAutograd
-
-    #         lst = [
-    #                 wrapper(layer0, layer1, i, perms), 
-    #                 torch.nn.ReLU()
-    #             ]
-    #         if i == len(layer_indices) -1:
-    #             lst = [
-    #                 wrapper(layer0, layer1, i, perms), 
-    #             ]
-    #         layers.extend(
-    #             lst
-    #         )
-
-    #     wrapped_model.layers = torch.nn.Sequential(*layers)
-
-    #     return wrapped_model
+        return wrapped_model.to(self.device)
     
     def _reset_network(self, layer_indices, netm, net1, perms, zero_grad=True):
         for i, layer_idx in enumerate(layer_indices):

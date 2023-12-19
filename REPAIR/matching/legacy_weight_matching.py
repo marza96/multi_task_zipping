@@ -10,7 +10,9 @@ from .matching_utils import apply_permutation, permmat_to_perm
 
 
 '''
-    Legacy code From the autors of <<PAPER NAME>>
+    Legacy code From the autors of
+    <<Revisiting Permutation Symmetry for 
+    Merging Models between Different Datasets>>
     Modified and used for research purposes
 '''
 
@@ -50,6 +52,38 @@ def mlp_permutation_spec(num_hidden_layers: int, bias_flg: bool) -> PermutationS
                for i in range(1, num_hidden_layers)},
             f"layer{num_hidden_layers}.weight": (None, f"P_{num_hidden_layers - 1}"),
         })
+    
+
+'layers.11.weight', 'layers.11.bias', 'layers.13.weight', 'layers.13.bias', 'layers.16.weight', 'layers.16.bias', 'layers.18.weight', 'layers.18.bias', 'layers.22.weight', 'layers.22.bias'
+def vgg11_permutation_spec() -> PermutationSpec:
+    return permutation_spec_from_axes_to_perm({
+        "layers.0.weight": ("P_Conv_0", None, None, None),
+        "layers.0.bias": ("P_Conv_0", None),
+
+        "layers.3.weight": ("P_Conv_1", "P_Conv_0", None, None),
+        "layers.3.bias": ("P_Conv_1", None),
+
+        "layers.6.weight": ("P_Conv_2", "P_Conv_1", None, None),
+        "layers.6.bias": ("P_Conv_2", None),
+
+        "layers.8.weight": ("P_Conv_3", "P_Conv_2", None, None),
+        "layers.8.bias": ("P_Conv_3", None),
+
+        "layers.11.weight": ("P_Conv_4", "P_Conv_3", None, None),
+        "layers.11.bias": ("P_Conv_4", None),
+
+        "layers.13.weight": ("P_Conv_5", "P_Conv_4", None, None),
+        "layers.13.bias": ("P_Conv_5", None),
+
+        "layers.16.weight": ("P_Conv_6", "P_Conv_5", None, None),
+        "layers.16.bias": ("P_Conv_6", None),
+
+        "layers.18.weight": ("P_Conv_7", "P_Conv_6", None, None),
+        "layers.18.bias": ("P_Conv_7", None),
+
+        "layers.22.weight": (None, "P_Conv_7"),
+        "layers.22.bias": (None, None),
+    })
     
 
 def get_permuted_param(ps, perm, k: str, params, except_axis=None):
@@ -171,7 +205,7 @@ def clone(x):
         ret[key] = x[key].clone().detach()
     return ret
 
-def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, epochs=10, dbg_perm=None):
+def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, epochs=10, dbg_perm=None, debug=False):
     from torch.nn.utils.stateless import functional_call
     import torchopt
 
@@ -219,6 +253,21 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, ep
             output = functional_call(model_target, midpoint_params, x)
             loss = torch.nn.functional.cross_entropy(output, t)
             loss.backward()
+
+            if debug is True:
+                if i == 40:
+                    print("iter %d ....................." % i)
+                    for key in train_state:
+                        if not "layers.4" in key:
+                            continue
+
+                        try:
+                            print("LEG G", key, train_state[key].grad[:5, :5])
+                        except:
+                            print("LEG G", key, train_state[key].grad[:5])
+
+                    print("......................................")
+
             
             for key in train_state.keys():
                 new_param = train_state[key].detach() -  lr * train_state[key].grad.detach()
@@ -233,6 +282,13 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, ep
             
             loss_acum += loss.mean()
             total += 1
+
+            if debug is True:
+                if i == 40:
+                    for p in pdb:
+                        print(p[:11])
+
+                    return
 
         print("LOSS: %d" % i, loss_acum / total)
 

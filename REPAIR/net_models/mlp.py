@@ -181,6 +181,25 @@ class SigmaWrapper(torch.nn.Module):
         return x
     
 
+class CovWrapper(torch.nn.Module):
+    def __init__(self, layer):
+        super().__init__()
+        self.layer = layer
+        self.cov   = None
+
+    def get_stats(self):
+        assert self.cov is not None
+        
+        return self.cov
+
+    def forward(self, x):
+        self.cov = torch.cov(x)
+
+        x = self.layer(x)
+
+        return x
+    
+
 class LayerWrapper(nn.Module):
     def __init__(self, layer, rescale=False):
         super().__init__()

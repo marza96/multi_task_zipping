@@ -59,21 +59,23 @@ def get_datasets():
 
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(fashMnistTrainSet, first_half),
-        batch_size=128,
+        batch_size=512,
         shuffle=False,
-        num_workers=1)
+        num_workers=8
+        )
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=128,
+        batch_size=512,
         shuffle=False,
-        num_workers=1)
+        num_workers=8
+        )
     
     ConcatLoader = torch.utils.data.DataLoader(
         ConcatDataset((torch.utils.data.Subset(fashMnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
-        batch_size=128,
+        batch_size=512,
         shuffle=False, 
-        num_workers=1
+        num_workers=8
     )
     
     return FirstHalfLoader, SecondHalfLoader, ConcatLoader
@@ -130,12 +132,12 @@ if __name__ == "__main__":
             "match_method": SteMatching(
                 torch.nn.functional.cross_entropy,
                 loaderc,
-                0.25,
+                0.1,
                 WeightMatching(
                     epochs=1000,
                     ret_perms=True
                 ),
-                epochs=20,
+                epochs=35,
                 device="mps"
             ),
             "device": "mps"
