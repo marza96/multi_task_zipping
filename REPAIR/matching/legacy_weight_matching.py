@@ -54,7 +54,6 @@ def mlp_permutation_spec(num_hidden_layers: int, bias_flg: bool) -> PermutationS
         })
     
 
-'layers.11.weight', 'layers.11.bias', 'layers.13.weight', 'layers.13.bias', 'layers.16.weight', 'layers.16.bias', 'layers.18.weight', 'layers.18.bias', 'layers.22.weight', 'layers.22.bias'
 def vgg11_permutation_spec() -> PermutationSpec:
     return permutation_spec_from_axes_to_perm({
         "layers.0.weight": ("P_Conv_0", None, None, None),
@@ -171,10 +170,11 @@ def weight_matching_ref(ps, params_a, params_b, max_iter=300, debug_perms=None, 
             break
 
     perm = {key: perm[key].to("mps") for key in perm}  # to device
-    final_perm = [None for _ in range(5)]
+    final_perm = [None for _ in range(len(perm.keys()))]
     for key in perm.keys():
-        idx = key.split("_")[1]
+        idx = key.split("_")[-1]
         final_perm[int(idx)] = perm[key].long()
+
     params_a = {key: params_a[key].to(device) for key in params_a}  # to device
     params_b = {key: params_b[key].to(device) for key in params_b}  # to device
 
@@ -219,6 +219,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, ep
     for key in train_state:
         train_state[key] = train_state[key].float()
 
+    cnt = 0
     for epoch in tqdm.tqdm(range(0, epochs)):
         correct = 0.
         loss_acum = 0.0
@@ -227,6 +228,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, ep
         for i, (x, t) in enumerate(tqdm.tqdm(train_loader, leave=False)):
             x = x.to(device)
             t = t.to(device)
+            cnt += 1
 
             # projection by weight matching
             perm, pdb = weight_matching_ref(permutation_spec,
@@ -255,7 +257,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, ep
             loss.backward()
 
             if debug is True:
-                if i == 40:
+                if cnt == 200:
                     print("iter %d ....................." % i)
                     for key in train_state:
                         if not "layers.4" in key:
@@ -284,7 +286,7 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, ep
             total += 1
 
             if debug is True:
-                if i == 40:
+                if cnt == 200:
                     for p in pdb:
                         print(p[:11])
 
@@ -292,9 +294,9 @@ def wm_learning(model_a, model_b, train_loader, permutation_spec, device, lr, ep
 
         print("LOSS: %d" % i, loss_acum / total)
 
-    final_perm = [None for _ in range(5)]
+    final_perm = [None for _ in range(len(best_perm.keys()))]
     for key in best_perm.keys():
-        idx = key.split("_")[1]
+        idx = key.split("_")[-1]
         final_perm[int(idx)] = best_perm[key].long()
 
     return final_perm
