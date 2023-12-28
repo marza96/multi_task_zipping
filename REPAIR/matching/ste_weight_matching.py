@@ -149,6 +149,7 @@ class SteMatching:
         netm = copy.deepcopy(net0)
         netm = self._wrap_network(layer_indices, net0.to(self.device), net1.to(self.device), copy.deepcopy(perms))
 
+        cnt = 0
         for iteration in range(self.epochs):
             loss_acum = 0.0
             total = 0
@@ -156,6 +157,7 @@ class SteMatching:
             for i, (images, labels) in enumerate(tqdm.tqdm(self.loader)):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
+                cnt += 1
                 
                 perms = self.weight_matching(layer_indices, copy.deepcopy(netm), copy.deepcopy(net1), init_perm=perms)
                 self._reset_network(layer_indices, netm, net1.to(self.device), copy.deepcopy(perms), zero_grad=True)
@@ -165,7 +167,7 @@ class SteMatching:
                 gradient = torch.autograd.grad(loss, netm.parameters())
 
                 if self.debug is True:
-                    if i == 40: 
+                    if cnt == 200: 
                         print("iter %d ....................." % i)
                         for t, grad in zip(netm.named_parameters(), gradient):
                             name = t[0]
@@ -195,7 +197,7 @@ class SteMatching:
                 total += 1
 
                 if self.debug is True:
-                    if i == 40:
+                    if cnt == 200:
                         for p in perms:
                             print(p[:11])
 
