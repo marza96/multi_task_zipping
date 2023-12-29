@@ -169,7 +169,7 @@ def weight_matching_ref(ps, params_a, params_b, max_iter=300, debug_perms=None, 
         if not progress:
             break
 
-    perm = {key: perm[key].to("mps") for key in perm}  # to device
+    perm = {key: perm[key].to(device) for key in perm}  # to device
     final_perm = [None for _ in range(len(perm.keys()))]
     for key in perm.keys():
         idx = key.split("_")[-1]
