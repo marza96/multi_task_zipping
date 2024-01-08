@@ -1,7 +1,7 @@
 import torch
 import tqdm
 
-from .matching_utils import solve_lap, apply_permutation
+from .matching_utils import solve_lap, apply_permutation, permmat_to_perm
 
 
 class ActivationMatching:
@@ -25,6 +25,9 @@ class ActivationMatching:
 
         if self.ret_perm is True:
             return permutations
+        
+        out_shape = net0.layers[-1].weight.shape[0]
+        permutations += [permmat_to_perm(torch.eye(out_shape))]
         
         net1 = apply_permutation(layer_indices, net1, permutations)
 

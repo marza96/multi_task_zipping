@@ -1,3 +1,6 @@
+from collections import defaultdict
+
+
 class BaseFuseCfg:
     def __init__(self, *, num_experiments, alpha_split=10):
         self.num_experiments = num_experiments
@@ -8,6 +11,8 @@ class BaseFuseCfg:
         self._loaders  = None
         self._names    = None
         self._device   = None
+
+        self._def_config_keys = ["model_mod"]
 
     @property
     def models(self):
@@ -31,7 +36,10 @@ class BaseFuseCfg:
     def configs(self, new_configs):
         assert len(new_configs.keys()) == self.num_experiments
 
-        self._configs = new_configs
+        self._configs = {
+            k: defaultdict(lambda: None, new_configs[k])
+            for k in new_configs.keys()
+        }
 
     @configs.deleter
     def configs(self):

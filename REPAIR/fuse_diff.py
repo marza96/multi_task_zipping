@@ -31,7 +31,7 @@ def plot_stuff(x, y, x_label, y_label, legend, path):
 
 
 def fuse_from_cfg(train_cfg, debug=True):
-    for i in range(0, train_cfg.num_experiments):
+    for i in range(1, train_cfg.num_experiments):
         model_cls      = train_cfg.models[i]["model"]
         model_args     = train_cfg.models[i]["args"]
         loader0        = train_cfg.loaders[i]["loader0"]
@@ -42,12 +42,17 @@ def fuse_from_cfg(train_cfg, debug=True):
         model1_name    = train_cfg.names[i]["model1_name"]
         device         = train_cfg.configs[i]["device"]
         match_method   = train_cfg.configs[i]["match_method"]
+        model_mod      = train_cfg.configs[i]["model_mod"]
         root_path      = train_cfg.root_path
         alpha_split    = train_cfg.alpha_split
 
         model0          = model_cls(**model_args)
         model1          = model_cls(**model_args)
 
+        if model_mod is not None:
+            model0 = model_mod(model0)
+            model1 = model_mod(model1)
+            
         load_model(model0, "%s/pt_models/%s.pt" %(root_path, model0_name))
         load_model(model1, "%s/pt_models/%s.pt" %(root_path, model1_name))
 
@@ -56,7 +61,7 @@ def fuse_from_cfg(train_cfg, debug=True):
 
         neural_align_ = NeuralAlignDiff(model_cls, match_method, loader0, loader1, loaderc)
         
-        modela  = neural_align_.fuse_networks(model_args, model0, model1, 0.5, device=device, new_stats=True, permute=True).to(device)
+        modela  = neural_align_.fuse_networks(model_args, model0, model1, 0.5, device=device, new_stats=True, permute=True, model_mod=model_mod).to(device)
         acc     = evaluate_acc_single_head(modela.to(device), loader=loaderc, device=device)
         print("ITER %d Fused model accuracy: %f" %(i, acc))
 

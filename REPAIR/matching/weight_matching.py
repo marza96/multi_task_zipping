@@ -43,19 +43,17 @@ class WeightMatching():
         kernel_shape = weights0[0].shape[2:]
         obj          = torch.zeros(
             (
-                *kernel_shape, 
                 weights0[idx].shape[0], 
                 weights0[idx].shape[0]
             )
         )
 
-        w0_i = weights0[idx].clone().permute(2, 3, 0, 1)
-        w1_i = weights1[idx].clone().permute(2, 3, 0, 1)
-
-        if biases0[idx] is not None:
-            obj += torch.outer(biases0[idx], biases1[idx])
+        w0_i = weights0[idx].clone()
+        w1_i = weights1[idx].clone()
 
         if idx > 0:
+            w1_i = w1_i.permute(2, 3, 0, 1)
+
             p = torch.empty(
                 kernel_shape[0] * kernel_shape[1], 
                 *(perm_mats[idx - 1].shape)
@@ -65,11 +63,26 @@ class WeightMatching():
                 p[i, :, :] = perm_mats[idx - 1].clone()
 
             p = p.reshape(*kernel_shape, *(p.shape[1:]))
+            
+            w1_i = p @ w1_i.permute(0, 1, 3, 2)
+            w1_i = w1_i.permute(2, 3, 0, 1)
 
-            obj += w0_i @ p @ w1_i.permute(0, 1, 3, 2) 
+            w_a = torch.moveaxis(w0_i, 0, 0).reshape(obj.shape[0], -1)
+            w_b = torch.moveaxis(w1_i, 1, 0).reshape(obj.shape[0], -1)
+
+            obj += w_a @ w_b.T
+
+        if biases0[idx] is not None:
+            obj += torch.outer(biases0[idx], biases1[idx])
 
         if idx == 0:
-            obj += w0_i @ w1_i.permute(0, 1, 3, 2)
+            w0_i = weights0[idx].clone()
+            w1_i = weights1[idx].clone()
+
+            w_a = torch.moveaxis(w0_i, 0, 0).reshape(obj.shape[0], -1)
+            w_b = torch.moveaxis(w1_i, 0, 0).reshape(obj.shape[0], -1)
+
+            obj += w_a @ w_b.T
 
         if idx < len(weights0) - 1:
             w0_ii = weights0[idx + 1].clone()
@@ -79,7 +92,6 @@ class WeightMatching():
                 w0_ii = w0_ii[:, :, None, None]
                 w1_ii = w1_ii[:, :, None, None]
 
-            w0_ii = w0_ii.permute(2, 3, 0, 1)
             w1_ii = w1_ii.permute(2, 3, 0, 1)
 
             p = torch.empty(
@@ -92,9 +104,15 @@ class WeightMatching():
 
             p = p.reshape(*kernel_shape, *(p.shape[1:]))
 
-            obj += w0_ii.permute(0, 1, 3, 2) @ p @ w1_ii
+            w1_ii = p @ w1_ii
+            w1_ii = w1_ii.permute(2, 3, 0, 1)
+            
+            w_a = torch.moveaxis(w0_ii, 1, 0).reshape(obj.shape[0], -1)
+            w_b = torch.moveaxis(w1_ii, 1, 0).reshape(obj.shape[0], -1)
+
+            obj += w_a @ w_b.T
         
-        return obj.sum(0).sum(0)
+        return obj
 
     def objective(self, idx, perm_mats, weights0, weights1, biases0, biases1, l_types):
         if isinstance(l_types[idx], torch.nn.Linear):

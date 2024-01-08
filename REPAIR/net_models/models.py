@@ -28,7 +28,6 @@ class MLP(nn.Module):
             mid_layers.extend(lst)
             
         self.layers = nn.Sequential(*mid_layers)
-        # self.classifier = nn.Linear(channels, classes)
 
     def forward(self, x):
         if x.size(1) == 3:
@@ -36,42 +35,7 @@ class MLP(nn.Module):
 
         x = x.reshape(x.size(0), -1)
         x = self.layers(x)
-        # x = self.classifier(x)
  
-        return x
-    
-
-class CNN(nn.Module):
-    def __init__(self, channels=128, layers=5, classes=10):
-        super().__init__()
-        
-        self.classes    = classes
-        self.channels   = channels
-        self.num_layers = layers
-        self.subnet     = CNNSubnet
-        self.fc1        = nn.Conv2d(1, channels, 3, 1)
-
-        mid_layers = [
-            nn.Conv2d(1, channels, 3, 1),
-            nn.ReLU()
-        ]
-        for _ in range(layers):
-            mid_layers.extend([
-                nn.Conv2d(channels, channels, 3, 1),
-                nn.ReLU(),
-            ])
-
-        self.layers = nn.Sequential(*mid_layers)
-        self.classifier = nn.Linear(channels * (28 - 2 * (layers + 1)) ** 2, classes)
-
-    def forward(self, x):
-        if x.size(1) == 3:
-            x = x.mean(1, keepdim=True)
-
-        x = self.layers(x)
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)
-
         return x
     
 
@@ -108,21 +72,6 @@ class VGG(nn.Module):
         layers += [nn.Linear(self.w * cfg[-2], self.classes)]
 
         return nn.Sequential(*layers)
-
-
-class CNNSubnet(nn.Module):
-    def __init__(self, model, layer_i):
-        super().__init__()
-        self.model = model
-        self.layer_i = layer_i
-
-    def forward(self, x):
-        if x.size(1) == 3:
-            x = x.mean(1, keepdim=True)
-
-        x = self.model.layers[:self.layer_i + 1](x)
-        
-        return x
 
 
 class Subnet(nn.Module):
@@ -201,11 +150,17 @@ class CovWrapper(torch.nn.Module):
     
 
 class LayerWrapper(nn.Module):
-    def __init__(self, layer, rescale=False):
+    def __init__(self, layer, rescale=False, w=False):
         super().__init__()
         self.layer   = layer
         self.rescale = rescale
-        self.bn      = nn.BatchNorm1d(len(layer.weight))
+
+        if w is True:
+            self.bn = nn.BatchNorm1d(len(layer.layer.weight))
+            self.bn.to(self.layer.layer.weight.device)
+        else:
+            self.bn = nn.BatchNorm1d(len(layer.weight))
+            self.bn.to(self.layer.weight.device)
 
     def get_stats(self):
         mean = self.bn.running_mean
@@ -228,11 +183,17 @@ class LayerWrapper(nn.Module):
     
 
 class LayerWrapper2D(nn.Module):
-    def __init__(self, layer, rescale=False):
+    def __init__(self, layer, rescale=False, w=False):
         super().__init__()
         self.layer   = layer
         self.rescale = rescale
-        self.bn      = nn.BatchNorm2d(self.layer.weight.shape[0])
+
+        if w is True:
+            self.bn = nn.BatchNorm1d(len(layer.layer.weight))
+            self.bn.to(self.layer.layer.weight.device)
+        else:
+            self.bn = nn.BatchNorm1d(len(layer.weight))
+            self.bn.to(self.layer.weight.device)
 
     def get_stats(self):
         mean = self.bn.running_mean
@@ -253,13 +214,3 @@ class LayerWrapper2D(nn.Module):
         
         return x
     
-
-def main():
-    cnn = CNN()
-    tens = torch.zeros(1, 1, 28, 28)
-
-    out = cnn(tens)
-    print(out.shape)
-
-if __name__ == "__main__":
-    main()

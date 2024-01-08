@@ -8,8 +8,8 @@ from torch.optim import SGD
 from torch.nn import CrossEntropyLoss
 
 from REPAIR.train import train_from_cfg
-from REPAIR.net_models.mlp import MLP
-from REPAIR.net_models.mlp import CNN
+from REPAIR.net_models.models import MLP
+from REPAIR.net_models.models import CNN
 from REPAIR.train_cfg import BaseTrainCfg
 
 
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 25,
+            "epochs" : 30,
             "device": "mps",
             "optimizer": {
                 "class": SGD,
