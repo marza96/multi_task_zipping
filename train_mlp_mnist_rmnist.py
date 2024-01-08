@@ -8,8 +8,15 @@ from torch.optim import SGD
 from torch.nn import CrossEntropyLoss
 
 from REPAIR.train import train_from_cfg
-from REPAIR.net_models.models import VGG
+from REPAIR.net_models.mlp import MLP
+from REPAIR.net_models.mlp import CNN
 from REPAIR.train_cfg import BaseTrainCfg
+
+from torchvision.transforms.functional import rotate
+
+
+def rot_img(tensor):
+    return rotate(tensor, 90.0)
 
 
 def get_datasets():
@@ -20,25 +27,37 @@ def get_datasets():
             transforms.ToTensor(),
         ]
     )
-    mnistTrainSet = torchvision.datasets.CIFAR10(
+    mnistTrainSet = torchvision.datasets.MNIST(
         root=path + '/data', 
         train=True,
         download=True, 
         transform=transform
     )
 
+    fashMnistTrainSet = torchvision.datasets.MNIST(
+        root=path + '/data', 
+        train=True,
+        download=True, 
+        transform=transforms.Compose(
+        [
+            transforms.ToTensor(),
+            rot_img
+        ]
+        )
+    )
+
     first_half = [
-        idx for idx, target in enumerate(mnistTrainSet.targets) 
-        if target in [0, 1, 2, 3, 4]
+        idx for idx, target in enumerate(fashMnistTrainSet.targets) 
+        if target in [5, 6, 7, 8, 9]
     ]
 
     second_half = [
         idx for idx, target in enumerate(mnistTrainSet.targets) 
-        if target in [5, 6, 7, 8, 9]
+        if target in [0, 1, 2, 3, 4]
     ]  
 
     FirstHalfLoader = torch.utils.data.DataLoader(
-        torch.utils.data.Subset(mnistTrainSet, first_half),
+        torch.utils.data.Subset(fashMnistTrainSet, first_half),
         batch_size=128,
         shuffle=True,
         num_workers=8)
@@ -57,21 +76,20 @@ if __name__ == "__main__":
 
     train_cfg = BaseTrainCfg(num_experiments=2)
 
-    vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
     train_cfg.models = {
         0: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 1,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 128,
                 "classes": 10,
             }
         },
         1: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 1,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 128,
                 "classes": 10,
             }
         }
@@ -79,8 +97,8 @@ if __name__ == "__main__":
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 50,
-            "device": "cuda",
+            "epochs" : 18,
+            "device": "mps",
             "optimizer": {
                 "class": SGD,
                 "args": {
@@ -91,8 +109,8 @@ if __name__ == "__main__":
         },
         1: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 40,
-            "device": "cuda",
+            "epochs": 18,
+            "device": "mps",
             "optimizer": {
                 "class": SGD,
                 "args": {
@@ -107,8 +125,8 @@ if __name__ == "__main__":
         1: loader1
     }
     train_cfg.names = {
-        0: "vgg_cifar_split_first",
-        1: "vgg_cifar_split_second"
+        0: "mlp_first_mnist_rmnist",
+        1: "mlp_second_mnist_rmnist"
     }
     train_cfg.root_path = os.path.dirname(__file__)
 

@@ -7,7 +7,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import ConcatDataset
 
 from REPAIR.fuse_diff import fuse_from_cfg
-from REPAIR.net_models.mlp import MLP
+from REPAIR.net_models.models import MLP
 from REPAIR.fuse_cfg import BaseFuseCfg
 from REPAIR.matching.weight_matching import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
@@ -49,19 +49,19 @@ def get_datasets():
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(fashMnistTrainSet, first_half),
         batch_size=128,
-        shuffle=False,
+        shuffle=True,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
         batch_size=128,
-        shuffle=False,
+        shuffle=True,
         num_workers=8)
     
     ConcatLoader = torch.utils.data.DataLoader(
         ConcatDataset((torch.utils.data.Subset(fashMnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
-        batch_size=1024,
-        shuffle=False, 
+        batch_size=128,
+        shuffle=True, 
         num_workers=8
     )
     

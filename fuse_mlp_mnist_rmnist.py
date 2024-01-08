@@ -7,7 +7,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import ConcatDataset
 
 from REPAIR.fuse_diff import fuse_from_cfg
-from REPAIR.net_models.mlp import MLP
+from REPAIR.net_models.models import MLP
 from REPAIR.fuse_cfg import BaseFuseCfg
 from REPAIR.matching.weight_matching import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
@@ -59,22 +59,22 @@ def get_datasets():
 
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(fashMnistTrainSet, first_half),
-        batch_size=512,
-        shuffle=False,
+        batch_size=128,
+        shuffle=True,
         num_workers=8
         )
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=512,
-        shuffle=False,
+        batch_size=128,
+        shuffle=True,
         num_workers=8
         )
     
     ConcatLoader = torch.utils.data.DataLoader(
         ConcatDataset((torch.utils.data.Subset(fashMnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
-        batch_size=512,
-        shuffle=False, 
+        batch_size=128,
+        shuffle=True, 
         num_workers=8
     )
     
@@ -132,12 +132,12 @@ if __name__ == "__main__":
             "match_method": SteMatching(
                 torch.nn.functional.cross_entropy,
                 loaderc,
-                0.1,
+                0.35,
                 WeightMatching(
-                    epochs=1000,
+                    epochs=500,
                     ret_perms=True
                 ),
-                epochs=35,
+                epochs=20,
                 device="mps"
             ),
             "device": "mps"

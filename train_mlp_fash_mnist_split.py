@@ -8,7 +8,7 @@ from torch.optim import SGD
 from torch.nn import CrossEntropyLoss
 
 from REPAIR.train import train_from_cfg
-from REPAIR.net_models.models import VGG
+from REPAIR.net_models.mlp import MLP
 from REPAIR.train_cfg import BaseTrainCfg
 
 
@@ -20,7 +20,7 @@ def get_datasets():
             transforms.ToTensor(),
         ]
     )
-    mnistTrainSet = torchvision.datasets.CIFAR10(
+    mnistTrainSet = torchvision.datasets.FashionMNIST(
         root=path + '/data', 
         train=True,
         download=True, 
@@ -57,21 +57,20 @@ if __name__ == "__main__":
 
     train_cfg = BaseTrainCfg(num_experiments=2)
 
-    vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
     train_cfg.models = {
         0: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 1,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 128,
                 "classes": 10,
             }
         },
         1: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 1,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 128,
                 "classes": 10,
             }
         }
@@ -79,24 +78,23 @@ if __name__ == "__main__":
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 50,
-            "device": "cuda",
+            "epochs" : 80,
+            "device": "mps",
             "optimizer": {
-                "class": SGD,
+                "class": torch.optim.Adam,
                 "args": {
-                    "lr": 0.05,
-                    "momentum": 0.9
+                    "lr": 0.0005,
                 }
             }
         },
         1: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 40,
-            "device": "cuda",
+            "epochs": 30,
+            "device": "mps",
             "optimizer": {
-                "class": SGD,
+                "class": torch.optim.SGD,
                 "args": {
-                    "lr": 0.01,
+                    "lr": 0.05,
                     "momentum": 0.9
                 }
             }
@@ -107,8 +105,8 @@ if __name__ == "__main__":
         1: loader1
     }
     train_cfg.names = {
-        0: "vgg_cifar_split_first",
-        1: "vgg_cifar_split_second"
+        0: "mlp_first_fmnist",
+        1: "mlp_second_fmnist"
     }
     train_cfg.root_path = os.path.dirname(__file__)
 
