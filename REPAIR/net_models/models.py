@@ -189,10 +189,10 @@ class LayerWrapper2D(nn.Module):
         self.rescale = rescale
 
         if w is True:
-            self.bn = nn.BatchNorm1d(len(layer.layer.weight))
+            self.bn = nn.BatchNorm2d(self.layer.layer.weight.shape[0])
             self.bn.to(self.layer.layer.weight.device)
         else:
-            self.bn = nn.BatchNorm1d(len(layer.weight))
+            self.bn = nn.BatchNorm2d(layer.weight.shape[0])
             self.bn.to(self.layer.weight.device)
 
     def get_stats(self):

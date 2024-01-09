@@ -8,7 +8,7 @@ from torch.nn import CrossEntropyLoss
 from torch.utils.data import ConcatDataset
 
 from REPAIR.fuse_diff import fuse_from_cfg
-from REPAIR.net_models.mlp import VGG
+from REPAIR.net_models.models import VGG
 from REPAIR.fuse_cfg import BaseFuseCfg
 from REPAIR.matching.weight_matching import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
@@ -42,19 +42,19 @@ def get_datasets():
 
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, first_half),
-        batch_size=128,
+        batch_size=512,
         shuffle=True,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=128,
+        batch_size=512,
         shuffle=True,
         num_workers=8)
     
     ConcatLoader = torch.utils.data.DataLoader(
         ConcatDataset((torch.utils.data.Subset(mnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
-        batch_size=128,
+        batch_size=512,
         shuffle=True, 
         num_workers=8
     )

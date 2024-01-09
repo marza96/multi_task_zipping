@@ -91,7 +91,7 @@ if __name__ == "__main__":
         },
         1: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 40,
+            "epochs": 30,
             "device": "cuda",
             "optimizer": {
                 "class": SGD,

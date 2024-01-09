@@ -8,8 +8,7 @@ from torch.optim import SGD
 from torch.nn import CrossEntropyLoss
 
 from REPAIR.train import train_from_cfg
-from REPAIR.net_models.mlp import MLP
-from REPAIR.net_models.mlp import CNN
+from REPAIR.net_models.models import MLP
 from REPAIR.train_cfg import BaseTrainCfg
 
 from torchvision.transforms.functional import rotate

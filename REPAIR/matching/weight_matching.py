@@ -89,8 +89,9 @@ class WeightMatching():
             w1_ii = weights1[idx + 1].clone()
 
             if len(w0_ii.shape) == 2:
-                w0_ii = w0_ii[:, :, None, None]
-                w1_ii = w1_ii[:, :, None, None]
+                obj += w0_ii.T @ perm_mats[idx + 1] @ w1_ii
+
+                return obj
 
             w1_ii = w1_ii.permute(2, 3, 0, 1)
 
