@@ -109,8 +109,8 @@ if __name__ == "__main__":
         1: loader1
     }
     train_cfg.names = {
-        0: "vgg_cifar_split_first",
-        1: "vgg_cifar_split_second"
+        0: "vgg_cifar_split_first_bnorm",
+        1: "vgg_cifar_split_second_bnorm"
     }
     train_cfg.root_path = os.path.dirname(__file__)
 
