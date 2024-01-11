@@ -40,11 +40,12 @@ class MLP(nn.Module):
     
 
 class VGG(nn.Module):
-    def __init__(self, cfg, w=1, classes=10, in_channels=3):
+    def __init__(self, cfg, w=1, classes=10, in_channels=3, bnorm=False):
         super().__init__()
 
         self.in_channels = in_channels
         self.w           = w
+        self.bnorm       = bnorm
         self.classes     = classes
         self.subnet      = VGGSubnet
         self.layers      = self._make_layers(cfg)
@@ -65,6 +66,10 @@ class VGG(nn.Module):
             else:
                 layers.append(nn.Conv2d(in_channels if in_channels == 3 else self.w*in_channels,
                                      self.w*x, kernel_size=3, padding=1))
+                
+                if self.bnorm is True:
+                    layers.append(nn.BatchNorm2d(self.w*x))
+
                 layers.append(nn.ReLU(inplace=True))
                 in_channels = x
 
