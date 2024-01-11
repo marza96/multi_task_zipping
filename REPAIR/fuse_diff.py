@@ -1,5 +1,5 @@
 from .eval_tools import evaluate_acc_single_head
-from .neural_align_diff_integrated_GIT_REBASIN import NeuralAlignDiff
+from .neural_align_diff import NeuralAlignDiff
 
 from torchvision.transforms.functional import rotate
 
