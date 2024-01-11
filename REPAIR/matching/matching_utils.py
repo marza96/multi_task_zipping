@@ -14,6 +14,7 @@ def apply_permutation(layer_indices, net, perms, device=None):
         weight   = net.layers[layer_idx].weight
         bias     = net.layers[layer_idx].bias
 
+        perm_map = perm_map.to("cpu")
         net.layers[layer_idx].weight.data = weight[perm_map].clone()
         net.layers[layer_idx].bias.data   = bias[perm_map].clone()
 
