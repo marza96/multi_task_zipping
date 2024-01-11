@@ -8,7 +8,7 @@ from torch.nn import CrossEntropyLoss
 from torch.utils.data import ConcatDataset
 
 from REPAIR.fuse_diff import fuse_from_cfg
-from REPAIR.net_models.mlp import MLP
+from REPAIR.net_models.models import MLP
 from REPAIR.fuse_cfg import BaseFuseCfg
 from REPAIR.matching.weight_matching import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
