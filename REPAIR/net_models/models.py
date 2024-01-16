@@ -4,13 +4,15 @@ import torch.nn.functional as F
 
 
 class MLP(nn.Module):
-    def __init__(self, channels=128, layers=3, classes=10):
+    def __init__(self, channels=128, layers=3, classes=10, bnorm=False):
         super().__init__()
-
+        
+        self.bnorm      = bnorm
         self.classes    = classes
         self.channels   = channels
         self.num_layers = layers
         self.subnet     = Subnet
+        self.perm_spec  = MLPSpec(layers, bnorm=bnorm)
         
         mid_layers = [
             nn.Linear(28 * 28, channels, bias=True),
@@ -48,6 +50,7 @@ class VGG(nn.Module):
         self.bnorm       = bnorm
         self.classes     = classes
         self.subnet      = VGGSubnet
+        self.perm_spec   = VGGSpec(cfg, bnorm=bnorm)
         self.layers      = self._make_layers(cfg)
 
     def forward(self, x):
@@ -218,4 +221,233 @@ class LayerWrapper2D(nn.Module):
             return x_rescaled
         
         return x
+
+
+class VGGSpec:
+    def __init__(self, cfg, bnorm=False):
+        self._cfg       = cfg
+        self._layer_spec = list()
+        self._perm_spec = list()
+
+        offset = 0
+        i      = 0
+        for c in self._cfg:
+            if c == "M":
+                offset += 1
+                continue
+
+            modules = [
+                f"layers.{offset}.weight",
+                f"layers.{offset}.bias",
+            ]
+            perms = [
+                (i, i - 1),
+                (i, -1)
+            ]
+
+            if bnorm is True:
+                modules.extend(
+                    [
+                        f"layers.{offset + 1}.weight",
+                        f"layers.{offset + 1}.bias",
+                        f"layers.{offset + 1}.running_mean",
+                        f"layers.{offset + 1}.running_var",
+                    ]
+                )
+
+                perms.extend(
+                    [
+                        (i, -1),
+                        (i, -1),
+                        (i, -1),
+                        (i, -1),
+                    ]   
+                )
+
+            self._layer_spec.append(modules)
+            self._perm_spec.append(perms)
+            offset += 3 - (not bnorm)
+
+            i += 1
+        
+        self._layer_spec.append(
+            [
+                f"layers.{offset + 1}.weight",
+                f"layers.{offset + 1}.bias",
+            ]
+        )
+        self._perm_spec.append(
+            [
+                (-1, i - 1),
+                (-1, -1)
+            ]
+        )
+
+    @property
+    def cfg(self):
+        return self._cfg
     
+    @property
+    def layer_spec(self):
+        return self._layer_spec
+    
+    @property
+    def perm_spec(self):
+        return self._perm_spec
+    
+
+class MLPSpec:
+    def __init__(self, layers, bnorm=False):
+        self._cfg        = layers
+        self._layer_spec = list()
+        self._perm_spec  = list()
+
+        offset = 0
+        for i in range(layers):
+            modules = [
+                f"layers.{offset}.weight",
+                f"layers.{offset}.bias",
+            ]
+
+            perms = [
+                (i, i - 1),
+                (i, -1)
+            ]
+
+            if bnorm is True:
+                modules.extend(
+                    [
+                        f"layers.{offset + 1}.weight",
+                        f"layers.{offset + 1}.bias",
+                        f"layers.{offset + 1}.running_mean",
+                        f"layers.{offset + 1}.running_var",
+                        f"layers.{offset + 1}.num_batches_tracked",
+                    ]
+                )
+
+                perms.extend(
+                    [
+                        (i, -1),
+                        (i, -1),
+                        (i, -1),
+                        (i, -1),
+                        (i, -1)
+                    ]   
+                )
+
+            self._layer_spec.append(modules)
+            self._perm_spec.append(perms)
+
+            offset += 3 - (not bnorm)
+
+        self._layer_spec.append(
+            [
+                f"layers.{offset}.weight",
+                f"layers.{offset}.bias",
+            ]
+        )
+        self._perm_spec.append(
+            [
+                (-1, layers - 1),
+                (-1, -1)
+            ]
+        )
+
+        print(self._perm_spec)
+
+    @property
+    def cfg(self):
+        return self._cfg
+    
+    @property
+    def layer_spec(self):
+        return self._layer_spec
+    
+    @property
+    def perm_spec(self):
+        return self._perm_spec
+    
+
+def index_layers(model):
+    layer_indices = list()
+
+    for idx, m in enumerate(model.layers):
+        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear) or isinstance(m, LayerWrapper) or isinstance(m, LayerWrapper2D):
+            layer_indices.append(idx)
+
+    return layer_indices
+
+
+def test_vgg_specs():
+    cfg = {
+        'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+        'VGG13': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+        'VGG16': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
+        'VGG19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
+    }
+    
+    for bnorm in [True, False]:
+        for key in cfg.keys():
+            spec_list = list()
+            spec = VGGSpec(cfg[key], bnorm=bnorm)
+            for el in spec.perm_spec:
+                spec_list.append(int(el[0].split(".")[1]))
+
+            net = VGG(spec.cfg, bnorm=bnorm)
+            indices = index_layers(net)
+
+            for i in range(len(indices)):
+                if indices[i] != spec_list[i]:
+                    return False
+            
+    return True
+
+
+def test_mlp_specs():
+    for l in range(3, 7):
+        spec_list = list()
+        spec = MLPSpec(l, bnorm=False)
+        for el in spec.layer_spec:
+            spec_list.append(int(el[0].split(".")[1]))
+
+        net = MLP(layers=l, bnorm=False)
+        indices = index_layers(net)
+
+        for i in range(len(indices)):
+            if indices[i] != spec_list[i]:
+                return False
+    
+    spec = MLPSpec(5, bnorm=False)
+
+    for el in spec.layer_spec:
+        print(el)
+
+    for el in spec.perm_spec:
+        print(el)
+    
+    return True
+
+
+if __name__ == "__main__":
+    # res = test_vgg_specs()
+    # print(res)
+
+    # res = test_mlp_specs()
+    # print(res)
+
+    cfg = {
+        'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+        'VGG13': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+        'VGG16': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
+        'VGG19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
+    }
+
+    spec_list = list()
+    spec = VGGSpec(cfg["VGG11"], bnorm=True)
+    for el in spec.perm_spec:
+        print(el)
+        # spec_list.append(int(el[0].split(".")[1]))
+    
+    print("..........")
+    for el in spec._layer_spec:
+        print(el)

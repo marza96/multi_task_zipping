@@ -18,7 +18,7 @@ def save_model(model, i):
 
 
 def load_model(model, i):
-    sd = torch.load(i)
+    sd = torch.load(i, map_location=torch.device('cpu'))
     model.load_state_dict(sd)
 
 
