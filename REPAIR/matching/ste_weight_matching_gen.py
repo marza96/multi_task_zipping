@@ -112,27 +112,32 @@ class STELinear(torch.nn.Module):
         return x
     
 
-class STEBnorm(torch.nn.BatchNorm2d):
+class STEBnorm(torch.nn.Module):
     def __init__(self, layer_0, layer_1, p_out):
-        super().__init__(layer_0.weight.shape[0])
+        super().__init__()
 
         self.features = layer_0.weight.shape[0]
-        device        = layer_1.weight.device
-        layer_1.to(device)
+        self.weight   = torch.nn.Parameter(layer_0.weight.detach().float().clone())
+        self.bias     = torch.nn.Parameter(layer_0.bias.detach().float().clone())
 
-        self.weight = torch.nn.Parameter(layer_0.weight.detach().float())
-        self.bias   = torch.nn.Parameter(layer_0.bias.detach().float())
+        self.register_buffer("running_mean", layer_0.running_mean.detach().float().clone())
+        self.register_buffer("running_var", layer_0.running_var.detach().float().clone())
+        self.register_buffer("num_batches_tracked", layer_0.num_batches_tracked.detach().clone())
 
-        self.register_buffer("running_mean", layer_0.running_mean.detach().float())
-        self.register_buffer("running_var", layer_0.running_var.detach().float())
-        self.register_buffer("num_batches_tracked", layer_0.num_batches_tracked)
+        self.weight.requires_grad = True
+        self.bias.requires_grad   = True
+        
+        self.bn_state_dict   = {key: None for key in layer_0.state_dict().keys()}
+        self.bn_state_dict_0 = {key: None for key in layer_0.state_dict().keys()}
+        self.bn_state_dict_1 = {key: None for key in layer_0.state_dict().keys()}
 
-        self.weight.requires_grad              = True
-        self.bias.requires_grad                = True
+        for key in self.state_dict():
+            self.bn_state_dict_0[key] = torch.empty_like(layer_0.state_dict()[key])
+            self.bn_state_dict_1[key] = torch.empty_like(layer_0.state_dict()[key])
+            self.bn_state_dict[key]   = torch.empty_like(layer_0.state_dict()[key])
 
-        self.bn_state_dict_1     = layer_1.state_dict()
-        self.bn_state_dict_0     = layer_0.state_dict()
-        self.bn_state_dict       = {key: None for key in layer_0.state_dict().keys()}
+            self.bn_state_dict_0[key] = layer_0.state_dict()[key].clone().detach()
+            self.bn_state_dict_1[key] = layer_1.state_dict()[key].clone().detach()
 
         self._init_bn(p_out)
 
@@ -148,12 +153,26 @@ class STEBnorm(torch.nn.BatchNorm2d):
             else:
                 self.bn_state_dict_1[key] = self.bn_state_dict_1[key].detach()
 
-            self.bn_state_dict[key]   = self.bn_state_dict_1[key].detach() + (self.state_dict()[key] - self.state_dict()[key].detach())
-            self.bn_state_dict[key]   = 0.5 * (self.bn_state_dict_0[key].detach() + self.bn_state_dict[key])
+            if "weight" in key:
+                self.bn_state_dict[key] = self.bn_state_dict_1[key].detach() + (self.weight - self.weight.detach())
+                self.bn_state_dict[key] = 0.5 * (self.bn_state_dict_0[key].detach() + self.bn_state_dict[key])
+                
+                continue
+
+            if "bias" in key:
+                self.bn_state_dict[key] = self.bn_state_dict_1[key].detach() + (self.bias - self.bias.detach())
+                self.bn_state_dict[key] = 0.5 * (self.bn_state_dict_0[key].detach() + self.bn_state_dict[key])
+                
+                continue
+                
+            self.bn_state_dict[key] = self.bn_state_dict_1[key].detach() + (self.state_dict()[key] - self.state_dict()[key].detach())
+            self.bn_state_dict[key] = 0.5 * (self.bn_state_dict_0[key].detach() + self.bn_state_dict[key])
 
     def reset(self, layer_1, p_in, p_out):
-        self.bn_state_dict_1 = layer_1.state_dict()
-        self.p_out           = p_out
+        for key in self.state_dict():
+            self.bn_state_dict_1[key] = layer_1.state_dict()[key].clone().detach()
+
+        self.p_out = p_out
 
         self._init_bn(p_out)
 
@@ -196,7 +215,10 @@ class SteMatching:
                 labels = labels.to(self.device)
                 cnt += 1
                 
-                perms = self.weight_matching(spec, copy.deepcopy(netm), copy.deepcopy(net1), init_perm=perms)
+                print("CNT", cnt)
+                perms = self.weight_matching(spec, netm, copy.deepcopy(net1), init_perm=perms)
+                netm.to(self.device)
+                
                 self._reset_network(spec, netm, net1.to(self.device), copy.deepcopy(perms), zero_grad=True)
 
                 outputs = netm(images)
@@ -204,7 +226,7 @@ class SteMatching:
                 gradient = torch.autograd.grad(loss, netm.parameters())
 
                 if self.debug is True:
-                    if cnt == 1: 
+                    if cnt == 2: 
                         print("iter %d ....................." % i)
                         for t, grad in zip(netm.named_parameters(), gradient):
                             name = t[0]
@@ -214,9 +236,9 @@ class SteMatching:
                                 continue
                             
                             try:
-                                print("MY G", name, grad[:5, :5])
+                                print("MY GEN G", name, grad[:5, :5])
                             except:
-                                print("MY G", name, grad[:5])
+                                print("MY GEN G", name, grad[:5])
                         print("......................................")
 
                 for t, grad in zip(netm.named_parameters(), gradient):
@@ -234,7 +256,7 @@ class SteMatching:
                 total += 1
 
                 if self.debug is True:
-                    if cnt == 1:
+                    if cnt == 2:
                         for p in perms:
                             print(p[:11])
 

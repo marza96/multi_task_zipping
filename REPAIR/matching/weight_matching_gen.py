@@ -59,8 +59,8 @@ class WeightMatching():
             # key_split.insert(-1, "layer_hat")
             # key = ".".join(key_split)
             
-            w_0 = state_dict0[mod_spec[i]]
-            w_1 = state_dict1[mod_spec[i]]
+            w_0 = state_dict0[mod_spec[i]].clone().detach()
+            w_1 = state_dict1[mod_spec[i]].clone().detach()
 
             w_1 = self.get_permuted_param(w_1, self.perms, perm_spec[i], except_axis=axis)
 
