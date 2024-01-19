@@ -53,6 +53,12 @@ class WeightMatching():
             #     print("IN MY P_" + str(perm_spec[i][1]))
 
             # layer_idx = int(mod_spec[i].split(".")[1])
+
+            # key = mod_spec[i]
+            # key_split = key.split(".")
+            # key_split.insert(-1, "layer_hat")
+            # key = ".".join(key_split)
+            
             w_0 = state_dict0[mod_spec[i]]
             w_1 = state_dict1[mod_spec[i]]
 
@@ -104,13 +110,16 @@ class WeightMatching():
 
         assert l_type is not None
 
-        if isinstance(l_type, torch.nn.Linear):
-            return self.linear_objective(
-                idx, perm_mats, state_dict0, state_dict1, spec, ste)
+        return self.linear_objective(
+            idx, perm_mats, state_dict0, state_dict1, spec, ste)
 
-        if isinstance(l_type, torch.nn.Conv2d):
-            return self.linear_objective(
-                idx, perm_mats, state_dict0, state_dict1, spec, ste)
+        # if isinstance(l_type, torch.nn.Linear):
+        #     return self.linear_objective(
+        #         idx, perm_mats, state_dict0, state_dict1, spec, ste)
+
+        # if isinstance(l_type, torch.nn.Conv2d):
+        #     return self.linear_objective(
+        #         idx, perm_mats, state_dict0, state_dict1, spec, ste)
 
     def apply_permutation(self, spec, net, perms):
         net_state_dict = net.state_dict()
