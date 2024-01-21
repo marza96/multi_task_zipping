@@ -3,7 +3,6 @@ import tqdm
 import torch
 import torchviz
 
-from .matching_utils import apply_permutation
 from torch.nn.utils.stateless import functional_call
 
 
@@ -215,7 +214,6 @@ class SteMatching:
                 labels = labels.to(self.device)
                 cnt += 1
                 
-                print("CNT", cnt)
                 perms = self.weight_matching(spec, netm, copy.deepcopy(net1), init_perm=perms)
                 netm.to(self.device)
                 
@@ -267,7 +265,8 @@ class SteMatching:
         if self.ret_perms is True:
             return best_perm
         
-        net1 = apply_permutation(spec, net1, best_perm)
+        # NOTE Changed in comparison to old code
+        net1 = self.apply_permutation(spec, net1, best_perm)
         
         return net0, net1
     
@@ -276,6 +275,7 @@ class SteMatching:
         perm_spec            = copy.deepcopy(spec.perm_spec)
         layer_spec_unique    = copy.deepcopy(spec.layer_spec_unique)
 
+        print(layer_spec_unique)
         net1.to(self.device)
         for i, block in enumerate(layer_spec_unique):
             for j, module in enumerate(block):
@@ -332,3 +332,29 @@ class SteMatching:
                 netm.layers[layer_idx].reset(layer1, p_in, p_out)
                 if zero_grad is True:
                     netm.layers.zero_grad(set_to_none=True)
+
+    def apply_permutation(self, spec, net, perms):
+        net_state_dict = net.state_dict()
+
+        for i in range(len(spec.perm_spec)):
+            perm_spec  = copy.deepcopy(spec.perm_spec[i])
+            layer_spec = copy.deepcopy(spec.layer_spec[i])
+
+            assert len(perm_spec) == len(layer_spec)
+
+            for j in range(len(perm_spec)):
+                layer_key = layer_spec[j]
+                perm_axes = perm_spec[j]
+
+                perm_param = self.get_permuted_param(
+                    net_state_dict[layer_key],
+                    self.perms,
+                    perm_axes,
+                    except_axis=None
+                )
+
+                net_state_dict[layer_key] = perm_param
+
+        net.load_state_dict(net_state_dict)
+
+        return net

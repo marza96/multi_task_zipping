@@ -28,7 +28,7 @@ class WeightMatching():
 
         return w
 
-    def linear_objective(self, idx, perm_mats, state_dict0, state_dict1, spec, ste):
+    def objective_f(self, idx, perm_mats, state_dict0, state_dict1, spec, ste):
         mod_spec  = copy.deepcopy(spec.layer_spec[idx])
         perm_spec = copy.deepcopy(spec.perm_spec[idx])
 
@@ -44,20 +44,6 @@ class WeightMatching():
 
             if ('running_mean' in mod_spec[i]) or ('running_var' in mod_spec[i]) or ('num_batches_tracked' in mod_spec[i]):
                 continue
-
-            # module = mod_spec[i]
-
-            # if perm_spec[i][0] != None:
-            #     print("IN MY P_" + str(perm_spec[i][0]))
-            # if perm_spec[i][1] != None:
-            #     print("IN MY P_" + str(perm_spec[i][1]))
-
-            # layer_idx = int(mod_spec[i].split(".")[1])
-
-            # key = mod_spec[i]
-            # key_split = key.split(".")
-            # key_split.insert(-1, "layer_hat")
-            # key = ".".join(key_split)
             
             w_0 = state_dict0[mod_spec[i]].clone().detach()
             w_1 = state_dict1[mod_spec[i]].clone().detach()
@@ -74,27 +60,6 @@ class WeightMatching():
 
             cost += c
 
-            # if self.iteration == 1:
-            #     if "bias" not in mod_spec[i]:
-            #         print("K", self.iteration, w_1[:5, :5])
-            #     else:
-            #         print("K", w_1[:5])
-
-            #     print(".........")
-            
-            # print(self.iteration, int(idx))
-            # print(self.iteration == 6 and int(idx) == 2)
-            # print(self.iteration == 6, int(idx) == 2)
-        #     if self.iteration == 0 and int(idx) == 2:
-        #         print(mod_spec[i], w_1.shape, axis)
-        #         print("MY W", (w_0)[:5, :5])
-        
-        # if self.iteration == 1:
-        #     print("MY COST", cost[:5, :5])
-        #     return
-
-        # print("MY COST", cost[:5, :5])
-
         return cost
 
     def objective(self, idx, perm_mats, state_dict0, state_dict1, net0, net1, spec, ste):
@@ -110,16 +75,7 @@ class WeightMatching():
 
         assert l_type is not None
 
-        return self.linear_objective(
-            idx, perm_mats, state_dict0, state_dict1, spec, ste)
-
-        # if isinstance(l_type, torch.nn.Linear):
-        #     return self.linear_objective(
-        #         idx, perm_mats, state_dict0, state_dict1, spec, ste)
-
-        # if isinstance(l_type, torch.nn.Conv2d):
-        #     return self.linear_objective(
-        #         idx, perm_mats, state_dict0, state_dict1, spec, ste)
+        return self.objective_f(idx, perm_mats, state_dict0, state_dict1, spec, ste)
 
     def apply_permutation(self, spec, net, perms):
         net_state_dict = net.state_dict()
