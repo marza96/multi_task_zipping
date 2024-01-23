@@ -224,13 +224,13 @@ class SteMatching:
                 gradient = torch.autograd.grad(loss, netm.parameters())
 
                 if self.debug is True:
-                    if cnt == 2: 
+                    if cnt == 200: 
                         print("iter %d ....................." % i)
                         for t, grad in zip(netm.named_parameters(), gradient):
                             name = t[0]
                             param = t[1]
 
-                            if not "layers.18" in name:
+                            if not "layers.4" in name:
                                 continue
                             
                             try:
@@ -254,7 +254,7 @@ class SteMatching:
                 total += 1
 
                 if self.debug is True:
-                    if cnt == 2:
+                    if cnt == 200:
                         for p in perms:
                             print(p[:11])
 
@@ -268,6 +268,10 @@ class SteMatching:
         # NOTE Changed in comparison to old code
         net1 = self.apply_permutation(spec, net1, best_perm)
         
+        print("MY BEST PERM:")
+        for p in best_perm:
+            print(p[:11])
+
         return net0, net1
     
     def _wrap_network(self, spec, net0, net1, perms):
@@ -275,7 +279,6 @@ class SteMatching:
         perm_spec            = copy.deepcopy(spec.perm_spec)
         layer_spec_unique    = copy.deepcopy(spec.layer_spec_unique)
 
-        print(layer_spec_unique)
         net1.to(self.device)
         for i, block in enumerate(layer_spec_unique):
             for j, module in enumerate(block):
@@ -306,6 +309,19 @@ class SteMatching:
                 wrapped_model.layers[layer_idx] = STELinear(layer0, layer1, p_in, p_out)
 
         return wrapped_model.to(self.device)
+    
+    @staticmethod
+    def get_permuted_param(param, perms, perm_axes, except_axis=None):
+        w = param
+
+        for ax_idx, p in enumerate(perm_axes):
+            if ax_idx == except_axis:
+                continue
+            
+            if p != -1:
+                w = torch.index_select(w, ax_idx, perms[p].int())
+
+        return w
     
     def _reset_network(self, spec, netm, net1, perms, zero_grad=True):
         perm_spec            = copy.deepcopy(spec.perm_spec)
@@ -347,11 +363,11 @@ class SteMatching:
                 perm_axes = perm_spec[j]
 
                 perm_param = self.get_permuted_param(
-                    net_state_dict[layer_key],
-                    self.perms,
+                    net_state_dict[layer_key].cpu(),
+                    perms,
                     perm_axes,
                     except_axis=None
-                )
+                ).to(self.device)
 
                 net_state_dict[layer_key] = perm_param
 

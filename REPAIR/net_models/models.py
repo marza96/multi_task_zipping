@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from typing import Any, NamedTuple
+from collections import defaultdict, OrderedDict
+
 
 class MLP(nn.Module):
     def __init__(self, channels=128, layers=3, classes=10, bnorm=False):
@@ -225,9 +228,10 @@ class LayerWrapper2D(nn.Module):
 
 class VGGSpec:
     def __init__(self, cfg, bnorm=False):
-        self._cfg       = cfg
-        self._layer_spec = list()
-        self._perm_spec = list()
+        self._cfg               = cfg
+        self._layer_spec        = list()
+        self._perm_spec         = list()
+        self._layer_spec_unique = list()
 
         offset = 0
         i      = 0
@@ -244,6 +248,9 @@ class VGGSpec:
                 (i, i - 1),
                 (i, -1)
             ]
+            unique_modules = [
+                f"layers.{offset}"
+            ]
 
             if bnorm is True:
                 modules.extend(
@@ -254,7 +261,6 @@ class VGGSpec:
                         f"layers.{offset + 1}.running_var",
                     ]
                 )
-
                 perms.extend(
                     [
                         (i, -1),
@@ -263,9 +269,16 @@ class VGGSpec:
                         (i, -1),
                     ]   
                 )
+                unique_modules.extend(
+                    [
+                        f"layers.{offset + 1}"
+                    ]
+                )
 
             self._layer_spec.append(modules)
             self._perm_spec.append(perms)
+            self._layer_spec_unique.append(unique_modules)
+
             offset += 3 - (not bnorm)
 
             i += 1
@@ -282,6 +295,9 @@ class VGGSpec:
                 (-1, -1)
             ]
         )
+        self._layer_spec_unique.append(
+            [f"layers.{offset + bnorm}"] 
+        )
 
     @property
     def cfg(self):
@@ -292,15 +308,20 @@ class VGGSpec:
         return self._layer_spec
     
     @property
+    def layer_spec_unique(self):
+        return self._layer_spec_unique
+    
+    @property
     def perm_spec(self):
         return self._perm_spec
     
 
 class MLPSpec:
     def __init__(self, layers, bnorm=False):
-        self._cfg        = layers
-        self._layer_spec = list()
-        self._perm_spec  = list()
+        self._cfg               = layers
+        self._layer_spec        = list()
+        self._perm_spec         = list()
+        self._layer_spec_unique = list()
 
         offset = 0
         for i in range(layers):
@@ -308,10 +329,12 @@ class MLPSpec:
                 f"layers.{offset}.weight",
                 f"layers.{offset}.bias",
             ]
-
             perms = [
                 (i, i - 1),
                 (i, -1)
+            ]
+            unique_modules = [
+                f"layers.{offset}"
             ]
 
             if bnorm is True:
@@ -324,7 +347,6 @@ class MLPSpec:
                         f"layers.{offset + 1}.num_batches_tracked",
                     ]
                 )
-
                 perms.extend(
                     [
                         (i, -1),
@@ -334,9 +356,15 @@ class MLPSpec:
                         (i, -1)
                     ]   
                 )
+                unique_modules.extend(
+                    [
+                        f"layers.{offset + 1}"
+                    ]
+                )
 
             self._layer_spec.append(modules)
             self._perm_spec.append(perms)
+            self._layer_spec_unique.append(unique_modules)
 
             offset += 3 - (not bnorm)
 
@@ -352,8 +380,9 @@ class MLPSpec:
                 (-1, -1)
             ]
         )
-
-        print(self._perm_spec)
+        self._layer_spec_unique.append(
+            [f"layers.{offset + bnorm}"]
+        )
 
     @property
     def cfg(self):
@@ -366,6 +395,10 @@ class MLPSpec:
     @property
     def perm_spec(self):
         return self._perm_spec
+    
+    @property
+    def layer_spec_unique(self):
+        return self._layer_spec_unique
     
 
 def index_layers(model):
@@ -427,6 +460,44 @@ def test_mlp_specs():
     
     return True
 
+class PermutationSpec(NamedTuple):
+    perm_to_axes: dict
+    axes_to_perm: dict
+
+
+def permutation_spec_from_axes_to_perm(axes_to_perm: dict) -> PermutationSpec:
+    perm_to_axes = defaultdict(list)
+    # print(axes_to_perm)
+    for wk, axis_perms in axes_to_perm.items():
+        # print(axis_perms)
+        for axis, perm in enumerate(axis_perms):
+            if perm is not None:
+                perm_to_axes[perm].append((wk, axis))
+        
+    return PermutationSpec(perm_to_axes=dict(perm_to_axes), axes_to_perm=axes_to_perm)
+
+def mlp_permutation_spec(num_hidden_layers: int, bias_flg: bool) -> PermutationSpec:
+    """We assume that one permutation cannot appear in two axes of the same weight array."""
+    assert num_hidden_layers >= 1
+
+    if bias_flg:
+        return permutation_spec_from_axes_to_perm({
+            "layers.0.weight": ("P_0", None),
+            **{f"layers.{2*i}.weight": (f"P_{i}", f"P_{i - 1}")
+               for i in range(1, num_hidden_layers)},
+            **{f"layers.{2*i}.bias": (f"P_{i}",)
+               for i in range(num_hidden_layers)},
+            f"layers.{2 * num_hidden_layers}.weight": (None, f"P_{num_hidden_layers - 1}"),
+            f"layers.{2 * num_hidden_layers}.bias": (None,),
+        })
+    else:
+        return permutation_spec_from_axes_to_perm({
+            "layer0.weight": ("P_0", None),
+            **{f"layer{i}.weight": (f"P_{i}", f"P_{i - 1}")
+               for i in range(1, num_hidden_layers)},
+            f"layer{num_hidden_layers}.weight": (None, f"P_{num_hidden_layers - 1}"),
+        })
+
 
 if __name__ == "__main__":
     # res = test_vgg_specs()
@@ -446,8 +517,21 @@ if __name__ == "__main__":
     spec = VGGSpec(cfg["VGG11"], bnorm=True)
     for el in spec.perm_spec:
         print(el)
-        # spec_list.append(int(el[0].split(".")[1]))
     
     print("..........")
     for el in spec._layer_spec:
         print(el)
+
+    print("MLP:")
+
+    spec_list = list()
+    spec = MLPSpec(5, bnorm=True)
+    for el in spec.perm_spec:
+        print(el)
+    
+    print("..........")
+    for el in spec._layer_spec:
+        print(el)
+
+    print("LEG")
+    print(mlp_permutation_spec(5, True))

@@ -61,7 +61,7 @@ class NeuralAlignDiff:
         init_perm = None
         init_perm_leg = None
 
-        # torch.manual_seed(0)
+        torch.manual_seed(0)
         # dbg_perms = [
         #     torch.randperm(len(self.layer_indices) - 1) for _ in range(1000)
         # ]
@@ -90,49 +90,43 @@ class NeuralAlignDiff:
         ### NOTE Legacy Weight Matching
         from .matching.legacy_weight_matching import mlp_permutation_spec, vgg11_permutation_spec, vgg11_permutation_spec_bnorm, weight_matching_ref
         from .matching.legacy_weight_matching import weight_matching_ref
+        from .matching.matching_utils import permmat_to_perm, apply_permutation
 
         # ps = vgg11_permutation_spec_bnorm()
         # ps = mlp_permutation_spec(5, True)
         # params_a = cl0.state_dict()
         # params_b = cl1.state_dict()
         # perms, _ = weight_matching_ref(ps, params_a, params_b, max_iter=300, debug_perms=dbg_perms, init_perm=init_perm_leg, legacy=False)
-        # for perm in perms:
-        #     print(perm[:11])
-
-        # print("   ")
-        # print(".............")
-        # print("   ")
-
-        ### NOTE My Weight Matching Gen
+        # perms =  perms + [permmat_to_perm(torch.eye(128))]
+        # cl1 = apply_permutation(self.layer_indices, cl1.to("cpu"), perms)
+        # return cl0.to(device), cl1.to(device)
+        
+        # # NOTE My Weight Matching Gen
         # from .matching.weight_matching_gen import WeightMatching
         # wm = WeightMatching(epochs=iters, debug_perms=dbg_perms, ret_perms=False)
         # cl0, cl1 = wm(self.layer_indices_ext, cl0, cl1, init_perm=init_perm)
+        # return cl0.to(device), cl1.to(device)
         
-        from .matching.weight_matching import WeightMatching
-        wm = WeightMatching(epochs=iters, debug_perms=dbg_perms, ret_perms=False)
-        cl0, cl1 = wm(self.layer_indices, cl0, cl1, init_perm=init_perm)
-
-        return cl0, cl1
-        # from .matching.matching_utils import permmat_to_perm, apply_permutation
+        ## NOTE STE FROM ON NOW
         # from .matching.weight_matching_gen import WeightMatching
-
         # wm = WeightMatching(epochs=iters, debug_perms=dbg_perms, ret_perms=True)
         # from .matching.ste_weight_matching_gen import SteMatching
-        # sm = SteMatching(torch.nn.functional.cross_entropy, self.loaderc, 0.25, wm, debug=dbg, epochs=20, device="mps")
-        # sm(self.layer_indices_ext, cl0, cl1)
-    
-
-        # from .matching.legacy_weight_matching import vgg11_permutation_spec_bnorm, vgg11_permutation_spec, weight_matching_ref
-        # from .matching.legacy_weight_matching import wm_learning, weight_matching_ref
-        # from .matching.matching_utils import permmat_to_perm, apply_permutation
-
-        # ps = vgg11_permutation_spec_bnorm()
-        # perms = wm_learning(model0.to("mps"), model1.to("mps"), self.loaderc, ps, "mps", 0.25, dbg_perm=dbg_perms, debug=dbg, epochs=1)
-        # perms =  perms + [permmat_to_perm(torch.eye(10))]
-        # cl1 = apply_permutation(self.layer_indices, cl1.to("cpu"), perms)
+        # sm = SteMatching(torch.nn.functional.cross_entropy, self.loaderc, 0.25, wm, debug=dbg, epochs=30, device="mps")
+        # cl0, cl1 = sm(self.layer_indices_ext, cl0, cl1)
+        # print(cl1.layers[0].weight[:5, :5])
         # return cl0, cl1
-    
 
+        from .matching.legacy_weight_matching import vgg11_permutation_spec_bnorm, vgg11_permutation_spec, weight_matching_ref
+        from .matching.legacy_weight_matching import wm_learning, weight_matching_ref
+        from .matching.matching_utils import permmat_to_perm, apply_permutation
+        ps = vgg11_permutation_spec_bnorm()
+        ps = mlp_permutation_spec(5, True)
+        perms = wm_learning(model0.to("mps"), model1.to("mps"), self.loaderc, ps, "mps", 0.25, dbg_perm=dbg_perms, debug=dbg, epochs=30)
+        perms =  perms + [permmat_to_perm(torch.eye(128))]
+        cl1 = apply_permutation(self.layer_indices, cl1.to("cpu"), perms)
+        print(cl1.layers[0].weight[:5, :5])
+        return cl0, cl1
+    
         if self.perms_calc is True:
             return self.aligned0, self.aligned1
 
@@ -186,11 +180,16 @@ class NeuralAlignDiff:
 
         self.mix_weights(modela, self.aligned0, self.aligned1, alpha)
 
-
         if new_stats is False:
             return modela
+        
+        final = repair(self.aligned0, self.aligned1, modela, self.model_cls, self.layer_indices, self.loader0, self.loader1, self.loaderc, device=device)
+        print("REF", final.layers[2].bn.weight[:5])
 
-        return self.REPAIR_smart(alpha, self.aligned0, self.aligned1, modela, loader=loader, device=device)
+        # final = self.REPAIR_smart(alpha, self.aligned0, self.aligned1, modela, loader=loader, device=device)
+        # print("MY", final.layers[2].bn.weight[:5])
+        
+        return final
     
     def reset_bn_stats(self, model, loader, device="cpu", epochs=1):
         for m in model.modules():
@@ -211,42 +210,8 @@ class NeuralAlignDiff:
         modela_tracked = self.wrap_layers_smart(modela, rescale=False).to(device)
         
         if self.stats_calc is False:
-            self.reset_bn_stats(model0_tracked, self.loader0)
-            self.reset_bn_stats(model1_tracked, self.loader1)
-
-            # for i, layer_idx in enumerate(self.layer_indices):
-            #     layer = model0_tracked.layers[layer_idx]
-
-            #     try:
-            #         layer.layer.bn.eval()
-            #     except:
-            #         pass
-
-            #     layer.bn.train()
-            #     layer.bn.momentum = None
-            #     layer.bn.reset_running_stats()
-
-            # for i, layer_idx in enumerate(self.layer_indices):
-            #     layer = model1_tracked.layers[layer_idx]
-
-            #     try:
-            #         layer.layer.bn.eval()
-            #     except:
-            #         pass
-
-            #     layer.bn.train()
-            #     layer.bn.momentum = None
-            #     layer.bn.reset_running_stats()
-
-            # with torch.no_grad():
-            #     for inputs, labels in tqdm.tqdm(self.loader0):
-            #         _ = model0_tracked(inputs.to(device))
-
-            #     for inputs, labels in tqdm.tqdm(self.loader1):
-            #         _ = model1_tracked(inputs.to(device))
-
-            # model0_tracked.eval()
-            # model1_tracked.eval()
+            self.reset_bn_stats(model0_tracked, self.loader0, device)
+            self.reset_bn_stats(model1_tracked, self.loader1, device)
 
             for i, layer_idx in enumerate(self.layer_indices):
                 layer0 = model0_tracked.layers[layer_idx]
@@ -267,27 +232,88 @@ class NeuralAlignDiff:
             modela_tracked.layers[layer_idx].set_stats(mean, std)
             modela_tracked.layers[layer_idx].rescale = True
 
-        self.reset_bn_stats(modela_tracked, self.loaderc)
+        self.reset_bn_stats(modela_tracked, self.loaderc, device)
         
-        # for i, layer_idx in enumerate(self.layer_indices):
-        #     layer = modela_tracked.layers[layer_idx]
-            
-        #     try:
-        #         layer.layer.bn.eval()
-        #     except:
-        #         pass
-
-        #     layer.bn.train()
-        #     layer.bn.momentum = None
-        #     layer.bn.reset_running_stats()
-
-        # with torch.no_grad():
-        #     for _ in range(1):
-        #         for inputs, labels in tqdm.tqdm(self.loaderc):
-        #             _ = modela_tracked(inputs.to(device))
-
         modela_tracked.eval()
 
         self.stats_calc = True
 
         return modela_tracked
+    
+
+class ResetLinear(nn.Module):
+    def __init__(self, layer):
+        super().__init__()
+        self.h = h = layer.out_features if hasattr(layer, 'out_features') else 768
+        self.layer = layer
+        self.bn = nn.BatchNorm1d(h)
+        self.rescale = False
+        
+    def set_stats(self, goal_mean, goal_var):
+        self.bn.bias.data = goal_mean
+        goal_std = (goal_var + 1e-5).sqrt()
+        self.bn.weight.data = goal_std
+        
+    def forward(self, *args, **kwargs):
+        x = self.layer(*args, **kwargs)
+        if self.rescale:
+            x = self.bn(x)
+        else:
+            self.bn(x)
+        return x
+    
+
+def reset_bn_stats(model, loader, epochs=1, device="cpu"):
+    # resetting stats to baseline first as below is necessary for stability
+    for m in model.modules():
+        if type(m) == nn.BatchNorm2d:
+            m.momentum = None # use simple average
+            m.reset_running_stats()
+
+    # run a single train epoch with augmentations to recalc stats
+    model.train()
+    for _ in range(epochs):
+        with torch.no_grad():
+            for images, _ in loader:
+                output = model(images.to(device))
+    
+
+def make_tracked_net(net, model_cls, layer_indices, device="cpu"):
+    net1 = model_cls(layers=len(layer_indices) - 1, classes=net.classes).to(device)
+    net1.load_state_dict(net.state_dict())
+    for i in range(len(layer_indices)):
+        idx = layer_indices[i]
+        if isinstance(net1.layers[idx], nn.Linear):
+            net1.layers[idx] = ResetLinear(net1.layers[idx])
+    return net1.to(device).eval()
+
+
+def repair(model0, model1, model_a, model_cls, layer_indices, loader0, loader1, loaderc, device="cpu"):
+    ## calculate the statistics of every hidden unit in the endpoint networks
+    ## this is done practically using PyTorch BatchNorm2d layers.
+    wrap0 = make_tracked_net(model0, model_cls, layer_indices, device=device)
+    wrap1 = make_tracked_net(model1, model_cls, layer_indices, device=device)
+    reset_bn_stats(wrap0, loader0)
+    reset_bn_stats(wrap1, loader1)
+
+    wrap_a = make_tracked_net(model_a, model_cls, layer_indices, device=device)
+    ## set the goal mean/std in added bns of interpolated network, and turn batch renormalization on
+    for m0, m_a, m1 in zip(wrap0.modules(), wrap_a.modules(), wrap1.modules()):
+        if not isinstance(m0, ResetLinear):
+            continue
+        # get goal statistics -- interpolate the mean and std of parent networks
+        mu0 = m0.bn.running_mean
+        mu1 = m1.bn.running_mean
+        goal_mean = (mu0 + mu1)/2
+        var0 = m0.bn.running_var
+        var1 = m1.bn.running_var
+        goal_var = ((var0.sqrt() + var1.sqrt())/2).square()
+        # set these in the interpolated bn controller
+        m_a.set_stats(goal_mean, goal_var)
+        # turn rescaling on
+        m_a.rescale = True
+        
+    # reset the tracked mean/var and fuse rescalings back into conv layers 
+    reset_bn_stats(wrap_a, loaderc)
+
+    return wrap_a
