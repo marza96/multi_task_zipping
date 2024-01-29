@@ -13,7 +13,7 @@ from REPAIR.train_cfg import BaseTrainCfg
 
 
 def get_datasets():
-    path   = os.path.dirname(__file__)
+    path   = os.path.dirname(os.path.abspath(__file__))
 
     transform = transforms.Compose(
         [
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         0: {
             "loss_fn": CrossEntropyLoss(),
             "epochs" : 80,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": torch.optim.Adam,
                 "args": {
@@ -90,7 +90,7 @@ if __name__ == "__main__":
         1: {
             "loss_fn": CrossEntropyLoss(),
             "epochs": 30,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": torch.optim.SGD,
                 "args": {
@@ -108,6 +108,6 @@ if __name__ == "__main__":
         0: "mlp_first_fmnist",
         1: "mlp_second_fmnist"
     }
-    train_cfg.root_path = os.path.dirname(__file__)
+    train_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
 
     train_from_cfg(train_cfg)

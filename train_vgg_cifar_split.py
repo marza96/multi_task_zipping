@@ -13,7 +13,7 @@ from REPAIR.train_cfg import BaseTrainCfg
 
 
 def get_datasets():
-    path   = os.path.dirname(__file__)
+    path   = os.path.dirname(os.path.abspath(__file__))
 
     transform = transforms.Compose(
         [
@@ -110,6 +110,6 @@ if __name__ == "__main__":
         0: "vgg_cifar_split_first",
         1: "vgg_cifar_split_second"
     }
-    train_cfg.root_path = os.path.dirname(__file__)
+    train_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
 
     train_from_cfg(train_cfg)

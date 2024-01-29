@@ -112,9 +112,10 @@ class STELinear(torch.nn.Module):
     
 
 class STEBnorm(torch.nn.Module):
-    def __init__(self, layer_0, layer_1, p_out):
+    def __init__(self, layer_0, layer_1, p_out, conv=True):
         super().__init__()
 
+        self.conv     = conv
         self.features = layer_0.weight.shape[0]
         self.weight   = torch.nn.Parameter(layer_0.weight.detach().float().clone())
         self.bias     = torch.nn.Parameter(layer_0.bias.detach().float().clone())
@@ -176,10 +177,14 @@ class STEBnorm(torch.nn.Module):
         self._init_bn(p_out)
 
     def forward(self, input): 
-        x = functional_call(torch.nn.BatchNorm2d(self.features), self.bn_state_dict, input)
+        if self.conv is True:
+            x = functional_call(torch.nn.BatchNorm2d(self.features), self.bn_state_dict, input)
 
+            return x
+        
+        x = functional_call(torch.nn.BatchNorm1d(self.features), self.bn_state_dict, input)
+        
         return x
-    
 
 class SteMatching:
     def __init__(self, loss_fn, loader, lr, wm, debug=False, epochs=6, ret_perms=False, device="mps"):
@@ -302,7 +307,7 @@ class SteMatching:
                         p_in = perms[perm_spec[i][j][1]]
 
                 if isinstance(layer0, torch.nn.BatchNorm1d) or isinstance(layer0, torch.nn.BatchNorm2d):
-                    wrapped_model.layers[layer_idx] = STEBnorm(layer0, layer1, p_out)
+                    wrapped_model.layers[layer_idx] = STEBnorm(layer0, layer1, p_out, isinstance(layer0, torch.nn.BatchNorm2d))
 
                     continue
                 

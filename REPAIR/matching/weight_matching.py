@@ -28,7 +28,7 @@ class WeightMatching():
             obj += w0_i @ perm_mats[idx - 1] @ w1_i.T 
 
         if idx == 0:
-            obj += w0_i @  w1_i.T 
+            obj += w0_i @ w1_i.T 
 
         if idx < len(weights0) - 1:
             w0_ii = weights0[idx + 1].clone()
@@ -194,7 +194,7 @@ class WeightMatching():
             if init_perm is not None:
                 for i in range(len(weights0) - 1):
                     perm_mats[i] = perm_to_permmat(init_perm[i])
-            
+
             for iteration in range(self.epochs):
                 progress = False
                 rperm = torch.randperm(len(layer_indices) - 1)

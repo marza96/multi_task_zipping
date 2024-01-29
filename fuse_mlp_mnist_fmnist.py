@@ -104,9 +104,9 @@ if __name__ == "__main__":
             "match_method": ActivationMatching(
                 loaderc,
                 epochs=1,
-                device="mps"
+                device="cuda"
             ),
-            "device": "mps"
+            "device": "cuda"
         },
         1: {
             "match_method": WeightMatching(
@@ -125,9 +125,9 @@ if __name__ == "__main__":
                     ret_perms=True
                 ),
                 epochs=20,
-                device="mps"
+                device="cuda"
             ),
-            "device": "mps"
+            "device": "cuda"
         },
     }
     fuse_cfg.loaders = {

@@ -1,6 +1,7 @@
 from typing import Any
 import torch
 import copy
+import tqdm
 
 from .matching_utils import perm_to_permmat, permmat_to_perm, solve_lap, apply_permutation
 
@@ -140,7 +141,7 @@ class WeightMatching():
             state_dict0 = net0.state_dict()
             state_dict1 = net1.state_dict()
 
-            for iteration in range(self.epochs):
+            for iteration in tqdm.tqdm(range(self.epochs)):
                 self.iteration = iteration
                 progress       = False
                 rperm          = torch.randperm(len(perm_specs) - 1)

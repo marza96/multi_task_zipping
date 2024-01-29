@@ -16,7 +16,7 @@ from REPAIR.matching.ste_weight_matching import SteMatching
 
 
 def get_datasets():
-    path   = os.path.dirname(__file__)
+    path   = os.path.dirname(os.path.abspath(__file__))
 
     transform = transforms.Compose(
         [
@@ -134,6 +134,6 @@ if __name__ == "__main__":
         }
     }
     
-    fuse_cfg.root_path = os.path.dirname(__file__)
+    fuse_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
 
     fuse_from_cfg(fuse_cfg)

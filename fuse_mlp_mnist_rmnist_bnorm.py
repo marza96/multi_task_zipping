@@ -1,4 +1,5 @@
 import os
+import copy
 import torch
 import torchvision
 
@@ -11,9 +12,11 @@ from torch.utils.data import ConcatDataset
 from REPAIR.fuse_diff import fuse_from_cfg
 from REPAIR.net_models.models import MLP
 from REPAIR.fuse_cfg import BaseFuseCfg
-from REPAIR.matching.weight_matching import WeightMatching
+from REPAIR.matching.weight_matching_bnorm import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
 from REPAIR.matching.ste_weight_matching import SteMatching
+
+from REPAIR.net_models.models import LayerWrapper, LayerWrapper2D
 
 from torchvision.transforms.functional import rotate
 
@@ -67,21 +70,21 @@ def get_datasets():
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(fashMnistTrainSet, first_half),
         batch_size=512,
-        shuffle=False,
+        shuffle=True,
         num_workers=8
         )
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
         batch_size=512,
-        shuffle=False,
+        shuffle=True,
         num_workers=8
         )
     
     ConcatLoader = torch.utils.data.DataLoader(
         ConcatDataset((torch.utils.data.Subset(fashMnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
         batch_size=512,
-        shuffle=False, 
+        shuffle=True, 
         num_workers=8
     )
     
@@ -100,6 +103,7 @@ if __name__ == "__main__":
                 "layers": 5,
                 "channels": 128,
                 "classes": 10,
+                "bnorm": True
             }
         },
         1: {
@@ -108,6 +112,7 @@ if __name__ == "__main__":
                 "layers": 5,
                 "channels": 128,
                 "classes": 10,
+                "bnorm": True
             }
         },
         2: {
@@ -116,6 +121,7 @@ if __name__ == "__main__":
                 "layers": 5,
                 "channels": 128,
                 "classes": 10,
+                "bnorm": True
             }
         },
     }
@@ -126,11 +132,11 @@ if __name__ == "__main__":
                 epochs=1,
                 device="cuda"
             ),
-            "device": "cuda"
+            "device": "cuda",
         },
         1: {
             "match_method": WeightMatching(
-                epochs=1000,
+                epochs=3000,
                 debug=False
             ),
             "device": "cpu"
@@ -139,12 +145,12 @@ if __name__ == "__main__":
             "match_method": SteMatching(
                 torch.nn.functional.cross_entropy,
                 loaderc,
-                0.35,
+                0.1,
                 WeightMatching(
-                    epochs=500,
+                    epochs=1000,
                     ret_perms=True
                 ),
-                epochs=20,
+                epochs=35,
                 device="cuda"
             ),
             "device": "cuda"
@@ -169,19 +175,19 @@ if __name__ == "__main__":
     }
     fuse_cfg.names = {
         0: {
-            "experiment_name": "fuse_mlp_mnist_rmnist",
-            "model0_name": "mlp_first_mnist_rmnist",
-            "model1_name": "mlp_second_mnist_rmnist"
+            "experiment_name": "fuse_mlp_mnist_rmnist_bnorm",
+            "model0_name": "mlp_first_mnist_rmnist_bnorm",
+            "model1_name": "mlp_second_mnist_rmnist_bnorm"
         },
         1: {
-            "experiment_name": "fuse_mlp_mnist_rmnist",
-            "model0_name": "mlp_first_mnist_rmnist",
-            "model1_name": "mlp_second_mnist_rmnist"
+            "experiment_name": "fuse_mlp_mnist_rmnist_bnorm",
+            "model0_name": "mlp_first_mnist_rmnist_bnorm",
+            "model1_name": "mlp_second_mnist_rmnist_bnorm"
         },
         2: {
-            "experiment_name": "fuse_mlp_mnist_rmnist",
-            "model0_name": "mlp_first_mnist_rmnist",
-            "model1_name": "mlp_second_mnist_rmnist"
+            "experiment_name": "fuse_mlp_mnist_rmnist_bnorm",
+            "model0_name": "mlp_first_mnist_rmnist_bnorm",
+            "model1_name": "mlp_second_mnist_rmnist_bnorm"
         }
     }
     fuse_cfg.root_path = os.path.dirname(os.path.abspath(__file__))

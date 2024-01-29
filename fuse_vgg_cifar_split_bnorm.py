@@ -16,7 +16,7 @@ from REPAIR.matching.ste_weight_matching import SteMatching
 
 
 def get_datasets():
-    path   = os.path.dirname(__file__)
+    path   = os.path.dirname(os.path.abspath(__file__))
 
     transform = transforms.Compose(
         [
@@ -72,7 +72,7 @@ if __name__ == "__main__":
         0: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         1: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -126,8 +126,8 @@ if __name__ == "__main__":
     fuse_cfg.names = {
         0: {
             "experiment_name": "fuse_mlp_cifar_split_AM",
-            "model0_name": "vgg_cifar_split_first_bnorm",
-            "model1_name": "vgg_cifar_split_second_bnorm"
+            "model0_name": "vgg_cifar_split_first_bnorm_2",
+            "model1_name": "vgg_cifar_split_second_bnorm_2"
         },
         1: {
             "experiment_name": "fuse_mlp_cifar_split_WM",
@@ -136,6 +136,6 @@ if __name__ == "__main__":
         }
     }
     
-    fuse_cfg.root_path = os.path.dirname(__file__)
+    fuse_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
 
     fuse_from_cfg(fuse_cfg)

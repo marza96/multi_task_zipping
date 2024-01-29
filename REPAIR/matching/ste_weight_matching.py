@@ -4,6 +4,57 @@ import torch
 
 from .matching_utils import apply_permutation
 
+class Bnorm2dSTEFunc(torch.autograd.Function):
+    @staticmethod
+    def forward(input, w_for, b_for, w_hat, b_hat, w_back):
+        return torch.nn.functional.conv2d(
+            input, 
+            w_for.detach(), 
+            b_for.detach(), 
+            1, 1, 1, 1)
+
+    @staticmethod
+    def setup_context(ctx, inputs, output):
+        input, w_for, b_for, w_hat, b_hat, w_back = inputs
+        ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_back)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        input, _, _, _, _, w_back = ctx.saved_tensors
+        grad_input = grad_weight = grad_bias = None
+
+        grad_bias = (0.5 * grad_output).sum((0, 2, 3)).squeeze(0)
+        grad_input = torch.nn.grad.conv2d_input(input.shape, w_back, grad_output, padding=1) 
+        grad_weight = torch.nn.grad.conv2d_weight(input, w_back.shape, 0.5 * grad_output, padding=1)
+
+        return grad_input, None, None, grad_weight, grad_bias, None
+    
+
+class Bnorm1dSTEFunc(torch.autograd.Function):
+    @staticmethod
+    def forward(input, w_for, b_for, w_hat, b_hat, w_back):
+        return torch.nn.functional.conv2d(
+            input, 
+            w_for.detach(), 
+            b_for.detach(), 
+            1, 1, 1, 1)
+
+    @staticmethod
+    def setup_context(ctx, inputs, output):
+        input, w_for, b_for, w_hat, b_hat, w_back = inputs
+        ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_back)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        input, _, _, _, _, w_back = ctx.saved_tensors
+        grad_input = grad_weight = grad_bias = None
+
+        grad_bias = (0.5 * grad_output).sum((0, 2, 3)).squeeze(0)
+        grad_input = torch.nn.grad.conv2d_input(input.shape, w_back, grad_output, padding=1) 
+        grad_weight = torch.nn.grad.conv2d_weight(input, w_back.shape, 0.5 * grad_output, padding=1)
+
+        return grad_input, None, None, grad_weight, grad_bias, None
+
 
 class Conv2dSTEFunc(torch.autograd.Function):
     @staticmethod
@@ -122,6 +173,24 @@ class STEAutograd(torch.nn.Module):
                 self.bias,
                 0.5 * (self.w_0.detach() + self.w_1.detach()),
             )
+        if self.l_type is torch.nn.modules.batchnorm.BatchNorm2d:
+            x = Bnorm2dSTEFunc.apply(
+                x, 
+                0.5 * (self.w_0.detach() + self.w_1.detach()),
+                0.5 * (self.b_0.detach() + self.b_1.detach()),
+                self.weight,
+                self.bias,
+                0.5 * (self.w_0.detach() + self.w_1.detach()),
+            )
+        if self.l_type is torch.nn.modules.batchnorm.BatchNorm1d:
+            x = Bnorm1dSTEFunc.apply(
+                x, 
+                0.5 * (self.w_0.detach() + self.w_1.detach()),
+                0.5 * (self.b_0.detach() + self.b_1.detach()),
+                self.weight,
+                self.bias,
+                0.5 * (self.w_0.detach() + self.w_1.detach()),
+            )
         
         return x
     
@@ -148,7 +217,7 @@ class SteMatching:
 
         netm = copy.deepcopy(net0)
         netm = self._wrap_network(layer_indices, net0.to(self.device), net1.to(self.device), copy.deepcopy(perms))
-
+    
         cnt = 0
         for iteration in range(self.epochs):
             loss_acum = 0.0
@@ -167,13 +236,13 @@ class SteMatching:
                 gradient = torch.autograd.grad(loss, netm.parameters())
 
                 if self.debug is True:
-                    if cnt == 200: 
+                    if cnt == 2: 
                         print("iter %d ....................." % i)
                         for t, grad in zip(netm.named_parameters(), gradient):
                             name = t[0]
                             param = t[1]
 
-                            if not "layers.4" in name:
+                            if not "layers.18" in name:
                                 continue
                             
                             try:
@@ -197,7 +266,7 @@ class SteMatching:
                 total += 1
 
                 if self.debug is True:
-                    if cnt == 200:
+                    if cnt == 2:
                         for p in perms:
                             print(p[:11])
 
@@ -207,6 +276,10 @@ class SteMatching:
 
         if self.ret_perms is True:
             return best_perm
+        
+        print("MY BEST PERM:")
+        for p in best_perm:
+            print(p[:11])
         
         net1 = apply_permutation(layer_indices, net1, best_perm)
         

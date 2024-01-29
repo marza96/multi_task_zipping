@@ -2,8 +2,6 @@ import os
 import torch
 import torchvision
 
-import numpy as np
-
 import torchvision.transforms as transforms
 
 from torch.utils.data import ConcatDataset
@@ -15,73 +13,48 @@ from REPAIR.matching.weight_matching import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
 from REPAIR.matching.ste_weight_matching import SteMatching
 
-from torchvision.transforms.functional import rotate
-
-
-def rot_img(tensor):
-    return rotate(tensor, 90.0)
-
 
 def get_datasets():
     path   = os.path.dirname(os.path.abspath(__file__))
 
-    MEAN = 0.1305
-    STD  = 0.3071
-
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
-            torchvision.transforms.Normalize(np.array(MEAN), np.array(STD))
         ]
     )
-    mnistTrainSet = torchvision.datasets.MNIST(
+    mnistTrainSet = torchvision.datasets.FashionMNIST(
         root=path + '/data', 
         train=True,
         download=True, 
         transform=transform
     )
 
-    fashMnistTrainSet = torchvision.datasets.MNIST(
-        root=path + '/data', 
-        train=True,
-        download=True, 
-        transform=transforms.Compose(
-        [
-            transforms.ToTensor(),
-            torchvision.transforms.Normalize(np.array(MEAN), np.array(STD)),
-            rot_img
-        ]
-        )
-    )
-
     first_half = [
-        idx for idx, target in enumerate(fashMnistTrainSet.targets) 
-        if target in [5, 6, 7, 8, 9]
+        idx for idx, target in enumerate(mnistTrainSet.targets) 
+        if target in [0, 1, 2, 3, 4]
     ]
 
     second_half = [
         idx for idx, target in enumerate(mnistTrainSet.targets) 
-        if target in [0, 1, 2, 3, 4]
+        if target in [5, 6, 7, 8, 9]
     ]  
 
     FirstHalfLoader = torch.utils.data.DataLoader(
-        torch.utils.data.Subset(fashMnistTrainSet, first_half),
+        torch.utils.data.Subset(mnistTrainSet, first_half),
         batch_size=512,
-        shuffle=False,
-        num_workers=8
-        )
+        shuffle=True,
+        num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
         batch_size=512,
-        shuffle=False,
-        num_workers=8
-        )
+        shuffle=True,
+        num_workers=8)
     
     ConcatLoader = torch.utils.data.DataLoader(
-        ConcatDataset((torch.utils.data.Subset(fashMnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
+        ConcatDataset((torch.utils.data.Subset(mnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
         batch_size=512,
-        shuffle=False, 
+        shuffle=True, 
         num_workers=8
     )
     
@@ -98,24 +71,27 @@ if __name__ == "__main__":
             "model": MLP,
             "args": {
                 "layers": 5,
-                "channels": 128,
+                "channels": 512,
                 "classes": 10,
+                "bnorm": True
             }
         },
         1: {
             "model": MLP,
             "args": {
                 "layers": 5,
-                "channels": 128,
+                "channels": 512,
                 "classes": 10,
+                "bnorm": True
             }
         },
         2: {
             "model": MLP,
             "args": {
                 "layers": 5,
-                "channels": 128,
+                "channels": 512,
                 "classes": 10,
+                "bnorm": True
             }
         },
     }
@@ -139,9 +115,9 @@ if __name__ == "__main__":
             "match_method": SteMatching(
                 torch.nn.functional.cross_entropy,
                 loaderc,
-                0.35,
+                0.25,
                 WeightMatching(
-                    epochs=500,
+                    epochs=1000,
                     ret_perms=True
                 ),
                 epochs=20,
@@ -169,19 +145,19 @@ if __name__ == "__main__":
     }
     fuse_cfg.names = {
         0: {
-            "experiment_name": "fuse_mlp_mnist_rmnist",
-            "model0_name": "mlp_first_mnist_rmnist",
-            "model1_name": "mlp_second_mnist_rmnist"
+            "experiment_name": "fuse_mlp_fash_mnist_split_AM",
+            "model0_name": "mlp_first_fmnist_bnorm_2",
+            "model1_name": "mlp_second_fmnist_bnorm_2"
         },
         1: {
-            "experiment_name": "fuse_mlp_mnist_rmnist",
-            "model0_name": "mlp_first_mnist_rmnist",
-            "model1_name": "mlp_second_mnist_rmnist"
+            "experiment_name": "fuse_mlp_fash_mnist_split_WM",
+            "model0_name": "mlp_first_fmnist_bnorm_2",
+            "model1_name": "mlp_second_fmnist_bnorm_2"
         },
         2: {
-            "experiment_name": "fuse_mlp_mnist_rmnist",
-            "model0_name": "mlp_first_mnist_rmnist",
-            "model1_name": "mlp_second_mnist_rmnist"
+            "experiment_name": "fuse_mlp_fash_mnist_split_STE",
+            "model0_name": "mlp_first_fmnist_bnorm_2",
+            "model1_name": "mlp_second_fmnist_bnorm_2"
         }
     }
     fuse_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
