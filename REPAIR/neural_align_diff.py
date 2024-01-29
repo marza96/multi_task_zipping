@@ -57,11 +57,11 @@ class NeuralAlignDiff:
 
         dbg_perms = None
         dbg       = False
-        iters     = 1000
+        iters     = 300
         init_perm = None
         init_perm_leg = None
-
-        torch.manual_seed(0)
+        
+        # torch.manual_seed(0)
         # dbg_perms = [
         #     torch.randperm(len(self.layer_indices) - 1) for _ in range(1000)
         # ]
@@ -86,11 +86,10 @@ class NeuralAlignDiff:
         # cl1 = apply_permutation(self.layer_indices, cl1.to("cpu"), perms)
         # return cl0, cl1
 
-
-        ### NOTE Legacy Weight Matching
-        from .matching.legacy_weight_matching import mlp_permutation_spec, vgg11_permutation_spec, vgg11_permutation_spec_bnorm, weight_matching_ref
-        from .matching.legacy_weight_matching import weight_matching_ref
-        from .matching.matching_utils import permmat_to_perm, apply_permutation
+        # ### NOTE Legacy Weight Matching
+        # from .matching.legacy_weight_matching import mlp_permutation_spec, vgg11_permutation_spec, vgg11_permutation_spec_bnorm, weight_matching_ref
+        # from .matching.legacy_weight_matching import weight_matching_ref
+        # from .matching.matching_utils import permmat_to_perm, apply_permutation
 
         # ps = vgg11_permutation_spec_bnorm()
         # ps = mlp_permutation_spec(5, True)
@@ -101,31 +100,31 @@ class NeuralAlignDiff:
         # cl1 = apply_permutation(self.layer_indices, cl1.to("cpu"), perms)
         # return cl0.to(device), cl1.to(device)
         
-        # # NOTE My Weight Matching Gen
-        # from .matching.weight_matching_gen import WeightMatching
-        # wm = WeightMatching(epochs=iters, debug_perms=dbg_perms, ret_perms=False)
-        # cl0, cl1 = wm(self.layer_indices_ext, cl0, cl1, init_perm=init_perm)
-        # return cl0.to(device), cl1.to(device)
+        # NOTE My Weight Matching Gen
+        from .matching.weight_matching_gen import WeightMatching
+        wm = WeightMatching(epochs=iters, debug_perms=dbg_perms, ret_perms=False)
+        cl0, cl1 = wm(self.layer_indices_ext, cl0, cl1, init_perm=init_perm)
+        return cl0.to(device), cl1.to(device)
         
         ## NOTE STE FROM ON NOW
         # from .matching.weight_matching_gen import WeightMatching
         # wm = WeightMatching(epochs=iters, debug_perms=dbg_perms, ret_perms=True)
         # from .matching.ste_weight_matching_gen import SteMatching
-        # sm = SteMatching(torch.nn.functional.cross_entropy, self.loaderc, 0.25, wm, debug=dbg, epochs=30, device="mps")
+        # sm = SteMatching(torch.nn.functional.cross_entropy, self.loaderc, 0.25, wm, debug=dbg, epochs=15, device="mps")
         # cl0, cl1 = sm(self.layer_indices_ext, cl0, cl1)
-        # print(cl1.layers[0].weight[:5, :5])
+        # # print(cl1.layers[0].weight[:5, :5])
         # return cl0, cl1
 
-        from .matching.legacy_weight_matching import vgg11_permutation_spec_bnorm, vgg11_permutation_spec, weight_matching_ref
-        from .matching.legacy_weight_matching import wm_learning, weight_matching_ref
-        from .matching.matching_utils import permmat_to_perm, apply_permutation
-        ps = vgg11_permutation_spec_bnorm()
-        ps = mlp_permutation_spec(5, True)
-        perms = wm_learning(model0.to("mps"), model1.to("mps"), self.loaderc, ps, "mps", 0.25, dbg_perm=dbg_perms, debug=dbg, epochs=30)
-        perms =  perms + [permmat_to_perm(torch.eye(128))]
-        cl1 = apply_permutation(self.layer_indices, cl1.to("cpu"), perms)
-        print(cl1.layers[0].weight[:5, :5])
-        return cl0, cl1
+        # from .matching.legacy_weight_matching import mlp_permutation_spec, vgg11_permutation_spec_bnorm, vgg11_permutation_spec, weight_matching_ref
+        # from .matching.legacy_weight_matching import wm_learning, weight_matching_ref
+        # from .matching.matching_utils import permmat_to_perm, apply_permutation
+        # ps = vgg11_permutation_spec_bnorm()
+        # ps = mlp_permutation_spec(5, True)
+        # perms = wm_learning(model0.to("mps"), model1.to("mps"), self.loaderc, ps, "mps", 0.25, dbg_perm=dbg_perms, debug=dbg, epochs=30)
+        # perms =  perms + [permmat_to_perm(torch.eye(128))]
+        # cl1 = apply_permutation(self.layer_indices, cl1.to("cpu"), perms)
+        # print(cl1.layers[0].weight[:5, :5])
+        # return cl0, cl1
     
         if self.perms_calc is True:
             return self.aligned0, self.aligned1
@@ -163,6 +162,7 @@ class NeuralAlignDiff:
         model.load_state_dict(sd_alpha)
 
     def fuse_networks(self, model_args, model0, model1, alpha, loader=None, device=None, new_stats=True, permute=True, model_mod=None):
+        device = "cuda"
         modela = self.model_cls(**model_args).to(device)
 
         if model_mod is not None:
@@ -183,23 +183,24 @@ class NeuralAlignDiff:
         if new_stats is False:
             return modela
         
-        final = repair(self.aligned0, self.aligned1, modela, self.model_cls, self.layer_indices, self.loader0, self.loader1, self.loaderc, device=device)
-        print("REF", final.layers[2].bn.weight[:5])
+        final = repair_bnorm(self.aligned0, self.aligned1, modela, self.model_cls, self.layer_indices, self.loader0, self.loader1, self.loaderc, device="cuda")
+        # print("REF", final.layers[2].bn.weight[:5])
+        # print("REF", final.layers[2].layer.weight[:5, :5])
 
         # final = self.REPAIR_smart(alpha, self.aligned0, self.aligned1, modela, loader=loader, device=device)
         # print("MY", final.layers[2].bn.weight[:5])
         
         return final
     
-    def reset_bn_stats(self, model, loader, device="cpu", epochs=1):
+    def reset_bn_stats(self, model, loader, device="cpu", epochs=3):
         for m in model.modules():
-            if type(m) == nn.BatchNorm2d:
+            if type(m) == nn.BatchNorm2d or type(m) == nn.BatchNorm1d:
                 m.momentum = None 
                 m.reset_running_stats()
+                print("RESET")
 
         model.train()
-
-        for _ in range(epochs):
+        for _ in tqdm.tqdm(range(epochs)):
             with torch.no_grad():
                 for images, _ in tqdm.tqdm(loader):
                     output = model(images.to(device))
@@ -266,15 +267,17 @@ class ResetLinear(nn.Module):
 def reset_bn_stats(model, loader, epochs=1, device="cpu"):
     # resetting stats to baseline first as below is necessary for stability
     for m in model.modules():
-        if type(m) == nn.BatchNorm2d:
+        if type(m) == nn.BatchNorm2d or type(m) == nn.BatchNorm1d:
             m.momentum = None # use simple average
             m.reset_running_stats()
+            print("RESET")
 
+    print("DEV", device)
     # run a single train epoch with augmentations to recalc stats
     model.train()
     for _ in range(epochs):
         with torch.no_grad():
-            for images, _ in loader:
+            for images, _ in tqdm.tqdm(loader):
                 output = model(images.to(device))
     
 
@@ -293,8 +296,8 @@ def repair(model0, model1, model_a, model_cls, layer_indices, loader0, loader1, 
     ## this is done practically using PyTorch BatchNorm2d layers.
     wrap0 = make_tracked_net(model0, model_cls, layer_indices, device=device)
     wrap1 = make_tracked_net(model1, model_cls, layer_indices, device=device)
-    reset_bn_stats(wrap0, loader0)
-    reset_bn_stats(wrap1, loader1)
+    reset_bn_stats(wrap0, loader0, device=device)
+    reset_bn_stats(wrap1, loader1, device=device)
 
     wrap_a = make_tracked_net(model_a, model_cls, layer_indices, device=device)
     ## set the goal mean/std in added bns of interpolated network, and turn batch renormalization on
@@ -314,6 +317,12 @@ def repair(model0, model1, model_a, model_cls, layer_indices, loader0, loader1, 
         m_a.rescale = True
         
     # reset the tracked mean/var and fuse rescalings back into conv layers 
-    reset_bn_stats(wrap_a, loaderc)
+    reset_bn_stats(wrap_a, loaderc, device=device)
 
     return wrap_a
+
+
+def repair_bnorm(model0, model1, model_a, model_cls, layer_indices, loader0, loader1, loaderc, device="cpu"):
+    reset_bn_stats(model_a, loaderc, device=device)
+
+    return model_a
