@@ -19,17 +19,28 @@ class MLP(nn.Module):
         
         mid_layers = [
             nn.Linear(28 * 28, channels, bias=True),
-            nn.ReLU()
         ]
+        if self.bnorm is True:
+            mid_layers.append(nn.BatchNorm1d(channels))
+
+        mid_layers.append(nn.ReLU())
+
         for i in range(layers):
             lst  = [
                 nn.Linear(channels, channels, bias=True),
-                nn.ReLU(),
             ]
+            if self.bnorm is True:
+                lst.append(nn.BatchNorm1d(channels))
+                
+            lst.append(nn.ReLU())
+
             if i == self.num_layers - 1:
                 lst = [
                     nn.Linear(channels, channels, bias=True),
                 ]
+                if self.bnorm is True:
+                    lst.append(nn.BatchNorm1d(channels))
+
             mid_layers.extend(lst)
             
         self.layers = nn.Sequential(*mid_layers)
@@ -39,6 +50,7 @@ class MLP(nn.Module):
             x = x.mean(1, keepdim=True)
 
         x = x.reshape(x.size(0), -1)
+
         x = self.layers(x)
  
         return x
@@ -57,9 +69,9 @@ class VGG(nn.Module):
         self.layers      = self._make_layers(cfg)
 
     def forward(self, x):
-        out = self.layers[:-1](x)
+        out = self.layers[:-2](x)
         out = out.view(out.size(0), -1)
-        out = self.layers[-1](out)
+        out = self.layers[-2:](out)
         return out
 
     def _make_layers(self, cfg):
@@ -81,6 +93,9 @@ class VGG(nn.Module):
 
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
         layers += [nn.Linear(self.w * cfg[-2], self.classes)]
+
+        if self.bnorm is True:
+            layers.append(nn.BatchNorm1d(self.classes))
 
         return nn.Sequential(*layers)
 
@@ -344,7 +359,6 @@ class MLPSpec:
                         f"layers.{offset + 1}.bias",
                         f"layers.{offset + 1}.running_mean",
                         f"layers.{offset + 1}.running_var",
-                        f"layers.{offset + 1}.num_batches_tracked",
                     ]
                 )
                 perms.extend(
@@ -353,7 +367,6 @@ class MLPSpec:
                         (i, -1),
                         (i, -1),
                         (i, -1),
-                        (i, -1)
                     ]   
                 )
                 unique_modules.extend(
