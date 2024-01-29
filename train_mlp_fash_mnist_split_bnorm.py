@@ -13,7 +13,7 @@ from REPAIR.train_cfg import BaseTrainCfg
 
 
 def get_datasets():
-    path   = os.path.dirname(__file__)
+    path   = os.path.dirname(os.path.abspath(__file__))
 
     transform = transforms.Compose(
         [
@@ -205,6 +205,6 @@ if __name__ == "__main__":
         4: "mlp_first_fmnist_bnorm_4",
         5: "mlp_second_fmnist_bnorm_5",
     }
-    train_cfg.root_path = os.path.dirname(__file__)
+    train_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
 
     train_from_cfg(train_cfg)
