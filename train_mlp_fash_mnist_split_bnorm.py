@@ -116,7 +116,7 @@ if __name__ == "__main__":
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 14,
+            "epochs" : 16,
             "device": "cuda",
             "optimizer": {
                 "class": torch.optim.SGD,
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         },
         1: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 5,
+            "epochs": 10,
             "device": "cuda",
             "optimizer": {
                 "class": torch.optim.SGD,
@@ -199,11 +199,11 @@ if __name__ == "__main__":
     }
     train_cfg.names = {
         0: "mlp_first_fmnist_bnorm_0",
-        1: "mlp_second_fmnist_bnorm_1",
-        2: "mlp_first_fmnist_bnorm_2",
-        3: "mlp_second_fmnist_bnorm_3",
-        4: "mlp_first_fmnist_bnorm_4",
-        5: "mlp_second_fmnist_bnorm_5",
+        1: "mlp_second_fmnist_bnorm_0",
+        2: "mlp_first_fmnist_bnorm_1",
+        3: "mlp_second_fmnist_bnorm_1",
+        4: "mlp_first_fmnist_bnorm_2",
+        5: "mlp_second_fmnist_bnorm_2",
     }
     train_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
 

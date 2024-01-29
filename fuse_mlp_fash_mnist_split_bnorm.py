@@ -146,18 +146,18 @@ if __name__ == "__main__":
     fuse_cfg.names = {
         0: {
             "experiment_name": "fuse_mlp_fash_mnist_split_AM",
-            "model0_name": "mlp_first_fmnist_bnorm_2",
-            "model1_name": "mlp_second_fmnist_bnorm_2"
+            "model0_name": "mlp_first_fmnist_bnorm_1",
+            "model1_name": "mlp_second_fmnist_bnorm_1"
         },
         1: {
             "experiment_name": "fuse_mlp_fash_mnist_split_WM",
-            "model0_name": "mlp_first_fmnist_bnorm_2",
-            "model1_name": "mlp_second_fmnist_bnorm_2"
+            "model0_name": "mlp_first_fmnist_bnorm_1",
+            "model1_name": "mlp_second_fmnist_bnorm_1"
         },
         2: {
             "experiment_name": "fuse_mlp_fash_mnist_split_STE",
-            "model0_name": "mlp_first_fmnist_bnorm_2",
-            "model1_name": "mlp_second_fmnist_bnorm_2"
+            "model0_name": "mlp_first_fmnist_bnorm_1",
+            "model1_name": "mlp_second_fmnist_bnorm_1"
         }
     }
     fuse_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
