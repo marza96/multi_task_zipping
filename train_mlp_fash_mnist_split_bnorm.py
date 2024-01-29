@@ -117,7 +117,7 @@ if __name__ == "__main__":
         0: {
             "loss_fn": CrossEntropyLoss(),
             "epochs" : 14,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": torch.optim.SGD,
                 "args": {
@@ -130,7 +130,7 @@ if __name__ == "__main__":
         1: {
             "loss_fn": CrossEntropyLoss(),
             "epochs": 5,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": torch.optim.SGD,
                 "args": {
@@ -143,7 +143,7 @@ if __name__ == "__main__":
         2: {
             "loss_fn": CrossEntropyLoss(),
             "epochs" : 15,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": torch.optim.Adam,
                 "args": {
@@ -155,7 +155,7 @@ if __name__ == "__main__":
         3: {
             "loss_fn": CrossEntropyLoss(),
             "epochs": 15,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": torch.optim.Adam,
                 "args": {
@@ -167,7 +167,7 @@ if __name__ == "__main__":
         4: {
             "loss_fn": CrossEntropyLoss(),
             "epochs" : 35,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": torch.optim.Adam,
                 "args": {
@@ -179,7 +179,7 @@ if __name__ == "__main__":
         5: {
             "loss_fn": CrossEntropyLoss(),
             "epochs": 35,
-            "device": "mps",
+            "device": "cuda",
             "optimizer": {
                 "class": torch.optim.Adam,
                 "args": {
