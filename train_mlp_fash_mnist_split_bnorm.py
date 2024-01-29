@@ -2,37 +2,25 @@ import os
 import torch
 import torchvision
 
-import numpy as np
-
 import torchvision.transforms as transforms
 
 from torch.optim import SGD
 from torch.nn import CrossEntropyLoss
 
 from REPAIR.train import train_from_cfg
-from REPAIR.net_models.models import VGG
+from REPAIR.net_models.models import MLP
 from REPAIR.train_cfg import BaseTrainCfg
 
-#NOTE
-#NOTE
-#NOTE
-#NOTE IMPORTANT NOTE
-#     YOU FORGOT TO ADD BATCHNORM TO THE LAST LAYER
-#     OF VGG (classifier) for the case when bnorm == True
-def get_datasets():
-    path   = os.path.dirname(os.path.abspath(__file__))
 
-    # MEAN = [0.4906, 0.4856, 0.4508]
-    # STD  = [0.2454, 0.2415, 0.2620]
+def get_datasets():
+    path   = os.path.dirname(__file__)
 
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
-            # torchvision.transforms.Normalize(np.array(MEAN), np.array(STD))
         ]
     )
-    print("DBG", path)
-    mnistTrainSet = torchvision.datasets.CIFAR10(
+    mnistTrainSet = torchvision.datasets.FashionMNIST(
         root=path + '/data', 
         train=True,
         download=True, 
@@ -51,13 +39,13 @@ def get_datasets():
 
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, first_half),
-        batch_size=256,
+        batch_size=512,
         shuffle=True,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=256,
+        batch_size=512,
         shuffle=True,
         num_workers=8)
     
@@ -69,58 +57,57 @@ if __name__ == "__main__":
 
     train_cfg = BaseTrainCfg(num_experiments=6)
 
-    vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
     train_cfg.models = {
         0: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 4,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 512,
                 "classes": 10,
                 "bnorm": True
             }
         },
         1: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 4,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 512,
                 "classes": 10,
                 "bnorm": True
             }
         },
         2: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 4,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 512,
                 "classes": 10,
                 "bnorm": True
             }
         },
         3: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 4,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 512,
                 "classes": 10,
                 "bnorm": True
             }
         },
         4: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 4,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 512,
                 "classes": 10,
                 "bnorm": True
             }
         },
         5: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 4,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 512,
                 "classes": 10,
                 "bnorm": True
             }
@@ -129,8 +116,8 @@ if __name__ == "__main__":
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 13,
-            "device": "cuda",
+            "epochs" : 14,
+            "device": "mps",
             "optimizer": {
                 "class": torch.optim.SGD,
                 "args": {
@@ -142,8 +129,8 @@ if __name__ == "__main__":
         },
         1: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 13,
-            "device": "cuda",
+            "epochs": 5,
+            "device": "mps",
             "optimizer": {
                 "class": torch.optim.SGD,
                 "args": {
@@ -155,50 +142,48 @@ if __name__ == "__main__":
         },
         2: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 18,
-            "device": "cuda",
+            "epochs" : 15,
+            "device": "mps",
             "optimizer": {
-                "class": torch.optim.SGD,
+                "class": torch.optim.Adam,
                 "args": {
                     "lr": 0.001,
-                    "momentum": 0.9,
                     "weight_decay": 0.005
                 }
             }
         },
         3: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 18,
-            "device": "cuda",
+            "epochs": 15,
+            "device": "mps",
             "optimizer": {
-                "class": torch.optim.SGD,
+                "class": torch.optim.Adam,
                 "args": {
                     "lr": 0.001,
-                    "momentum": 0.9,
                     "weight_decay": 0.005
                 }
             }
         },
         4: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 18,
-            "device": "cuda",
+            "epochs" : 35,
+            "device": "mps",
             "optimizer": {
                 "class": torch.optim.Adam,
                 "args": {
-                    "lr": 0.001,
+                    "lr": 0.0001,
                     "weight_decay": 0.005
                 }
             }
         },
         5: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 18,
-            "device": "cuda",
+            "epochs": 35,
+            "device": "mps",
             "optimizer": {
                 "class": torch.optim.Adam,
                 "args": {
-                    "lr": 0.001,
+                    "lr": 0.0001,
                     "weight_decay": 0.005
                 }
             }
@@ -213,13 +198,13 @@ if __name__ == "__main__":
         5: loader1
     }
     train_cfg.names = {
-        0: "vgg_cifar_split_first_bnorm_0",
-        1: "vgg_cifar_split_second_bnorm_0",
-        2: "vgg_cifar_split_first_bnorm_1",
-        3: "vgg_cifar_split_second_bnorm_1",
-        4: "vgg_cifar_split_first_bnorm_2",
-        5: "vgg_cifar_split_second_bnorm_2"
+        0: "mlp_first_fmnist_bnorm_0",
+        1: "mlp_second_fmnist_bnorm_1",
+        2: "mlp_first_fmnist_bnorm_2",
+        3: "mlp_second_fmnist_bnorm_3",
+        4: "mlp_first_fmnist_bnorm_4",
+        5: "mlp_second_fmnist_bnorm_5",
     }
-    train_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
+    train_cfg.root_path = os.path.dirname(__file__)
 
     train_from_cfg(train_cfg)
