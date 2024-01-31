@@ -12,7 +12,7 @@ from REPAIR.net_models.models import MLP
 from REPAIR.train_cfg import BaseTrainCfg
 
 
-def get_datasets():
+def get_datasets(train=True):
     path   = os.path.dirname(os.path.abspath(__file__))
 
     transform = transforms.Compose(
@@ -22,7 +22,7 @@ def get_datasets():
     )
     mnistTrainSet = torchvision.datasets.FashionMNIST(
         root=path + '/data', 
-        train=True,
+        train=train,
         download=True, 
         transform=transform
     )
@@ -54,8 +54,9 @@ def get_datasets():
 
 if __name__ == "__main__":
     loader0, loader1 = get_datasets()
+    loader0_test, loader1_test = get_datasets(train=False)
 
-    train_cfg = BaseTrainCfg(num_experiments=6)
+    train_cfg = BaseTrainCfg(num_experiments=8)
 
     train_cfg.models = {
         0: {
@@ -111,55 +112,71 @@ if __name__ == "__main__":
                 "classes": 10,
                 "bnorm": True
             }
+        },
+        6: {
+            "model": MLP,
+            "args": {
+                "layers": 5,
+                "channels": 512,
+                "classes": 10,
+                "bnorm": True
+            }
+        },
+        7: {
+            "model": MLP,
+            "args": {
+                "layers": 5,
+                "channels": 512,
+                "classes": 10,
+                "bnorm": True
+            }
         }
     }
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 16,
+            "epochs" : 65,
             "device": "cuda",
             "optimizer": {
-                "class": torch.optim.SGD,
+                "class": torch.optim.Adam,
                 "args": {
-                    "lr": 0.01,
-                    "momentum": 0.9,
+                    "lr": 0.0001,
                     "weight_decay": 0.005
                 }
             }
         },
         1: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 10,
+            "epochs": 20,
             "device": "cuda",
             "optimizer": {
-                "class": torch.optim.SGD,
+                "class": torch.optim.Adam,
                 "args": {
-                    "lr": 0.01,
-                    "momentum": 0.9,
+                    "lr": 0.0001,
                     "weight_decay": 0.005
                 }
             }
         },
         2: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 15,
+            "epochs" : 25,
             "device": "cuda",
             "optimizer": {
                 "class": torch.optim.Adam,
                 "args": {
-                    "lr": 0.001,
+                    "lr": 0.0005,
                     "weight_decay": 0.005
                 }
             }
         },
         3: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 15,
+            "epochs": 25,
             "device": "cuda",
             "optimizer": {
                 "class": torch.optim.Adam,
                 "args": {
-                    "lr": 0.001,
+                    "lr": 0.0005,
                     "weight_decay": 0.005
                 }
             }
@@ -187,15 +204,43 @@ if __name__ == "__main__":
                     "weight_decay": 0.005
                 }
             }
+        },
+        6: {
+            "loss_fn": CrossEntropyLoss(),
+            "epochs" : 40,
+            "device": "cuda",
+            "optimizer": {
+                "class": torch.optim.Adam,
+                "args": {
+                    "lr": 0.0001,
+                    "weight_decay": 0.005
+                }
+            }
+        },
+        7: {
+            "loss_fn": CrossEntropyLoss(),
+            "epochs": 40,
+            "device": "cuda",
+            "optimizer": {
+                "class": torch.optim.Adam,
+                "args": {
+                    "lr": 0.0001,
+                    "weight_decay": 0.005
+                }
+            }
         }
     }
+    
+    train_cfg.proj_name = "mlp_fmnist_bnorm"
     train_cfg.loaders = {
-        0: loader0,
-        1: loader1,
-        2: loader0,
-        3: loader1,
-        4: loader0,
-        5: loader1
+        0: {"train": loader0, "test": loader0_test},
+        1: {"train": loader1, "test": loader1_test},
+        2: {"train": loader0, "test": loader0_test},
+        3: {"train": loader1, "test": loader1_test},
+        4: {"train": loader0, "test": loader0_test},
+        5: {"train": loader1, "test": loader1_test},
+        6: {"train": loader0, "test": loader0_test},
+        7: {"train": loader1, "test": loader1_test},
     }
     train_cfg.names = {
         0: "mlp_first_fmnist_bnorm_0",
@@ -204,6 +249,8 @@ if __name__ == "__main__":
         3: "mlp_second_fmnist_bnorm_1",
         4: "mlp_first_fmnist_bnorm_2",
         5: "mlp_second_fmnist_bnorm_2",
+        6: "mlp_first_fmnist_bnorm_3",
+        7: "mlp_second_fmnist_bnorm_3",
     }
     train_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
 

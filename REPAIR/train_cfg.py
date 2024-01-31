@@ -91,6 +91,18 @@ class BaseTrainCfg:
         del self._root
 
     @property
+    def proj_name(self):
+        return self._proj_name
+	
+    @proj_name.setter
+    def proj_name(self, new_proj_name):
+        self._proj_name = new_proj_name
+
+    @proj_name.deleter
+    def proj_name(self):
+        del self._proj_name
+
+    @property
     def device(self):
         return self._device
 	

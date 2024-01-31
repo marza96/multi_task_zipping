@@ -141,7 +141,7 @@ class WeightMatching():
             state_dict0 = net0.state_dict()
             state_dict1 = net1.state_dict()
 
-            for iteration in tqdm.tqdm(range(self.epochs)):
+            for iteration in (range(self.epochs)):
                 self.iteration = iteration
                 progress       = False
                 rperm          = torch.randperm(len(perm_specs) - 1)

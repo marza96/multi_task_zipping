@@ -1,6 +1,6 @@
 import os
+import wandb
 import torch
-import argparse
 import torchvision
 
 import numpy as np
@@ -28,7 +28,7 @@ def init_weights(m):
         m.bias.data.fill_(0.01)
 
 
-def train_loop(*, model, optimizer, loss_fn, epochs, train_loader, device="cuda"):
+def train_loop(*, model, optimizer, loss_fn, epochs, train_loader, test_loader, device="cuda"):
     model.apply(init_weights)
 
     for _ in tqdm(range(epochs)):
@@ -47,8 +47,26 @@ def train_loop(*, model, optimizer, loss_fn, epochs, train_loader, device="cuda"
             total += 1
             optimizer.step()
 
-        print("LOSS: ", loss_acum / total)
-    
+        train_loss = loss_acum / total
+
+
+        model.eval()
+        loss_acum = 0.0
+        total = 0
+        for _, (inputs, labels) in enumerate(test_loader):
+            optimizer.zero_grad(set_to_none=True)
+
+            outputs = model(inputs.to(device))
+            loss    = loss_fn(outputs, labels.to(device))
+
+            loss_acum += loss.mean()
+            total += 1
+
+        test_loss = loss_acum / total
+
+        test_acc = evaluate_acc_single_head(model, loader=test_loader, device=device)
+        wandb.log({"test_acc": test_acc, "train_loss": train_loss, "test_loss": test_loss})
+
     print("TRAIN ACC:", evaluate_acc_single_head(model, loader=train_loader, device=device))
 
     return model
@@ -64,11 +82,25 @@ def train_from_cfg(train_cfg):
         device         = train_cfg.configs[i]["device"]
         loss_fn        = train_cfg.configs[i]["loss_fn"]
         model_mod      = train_cfg.configs[i]["model_mod"]
-        train_loader   = train_cfg.loaders[i]
+        train_loader   = train_cfg.loaders[i]["train"]
+        test_loader    = train_cfg.loaders[i]["test"]
         exp_name       = train_cfg.names[i]
         root_path      = train_cfg.root_path
         model          = model_cls(**model_args).to(device)
         optimizer      = optimizer_cls(model.parameters(), **optimizer_args)
+
+        desc = {key: optimizer_args[key] for key in optimizer_args.keys()}
+        desc.update(
+            {"experiment": exp_name}
+        )
+
+        proj_name = train_cfg.proj_name
+
+        wandb.init(
+            project=proj_name,
+            config=desc,
+            name=exp_name
+        )
 
         if model_mod is not None:
             model = model_mod(model)
@@ -79,8 +111,11 @@ def train_from_cfg(train_cfg):
             loss_fn=loss_fn,
             epochs=epochs,
             train_loader=train_loader,
+            test_loader=test_loader,
             device=device
         )
+
+        wandb.finish()
 
         os.makedirs("%s/pt_models/" %(root_path), exist_ok=True)
         save_model(trained_model, "%s/pt_models/%s.pt" %(root_path, exp_name))

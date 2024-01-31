@@ -2,6 +2,7 @@ import copy
 import tqdm
 import torch
 import torchviz
+import wandb
 
 from torch.nn.utils.stateless import functional_call
 
@@ -32,21 +33,25 @@ class Conv2dSTEFunc(torch.autograd.Function):
         return grad_input, None, None, grad_weight, grad_bias, None
 
 
+# TODO Fix autograd function format depending on pytorch version
+    
 class DenseSTEFunc(torch.autograd.Function):
     @staticmethod
-    def forward(input, w_for, b_for, w_hat, b_hat, w_back):
+    def forward(ctx, input, w_for, b_for, w_hat, b_hat, w_back):
+        ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_back)
+
         a = input.mm(w_for.detach().t()) + b_for.detach()
         
         return a 
 
-    @staticmethod
-    def setup_context(ctx, inputs, output):
-        input, w_for, b_for, w_hat, b_hat, w_back = inputs
-        ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_back)
+    # @staticmethod
+    # def setup_context(ctx, inputs, output):
+    #     input, w_for, b_for, w_hat, b_hat, w_back = inputs
+    #     ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_back)
 
     @staticmethod
     def backward(ctx, grad_output):
-        input, _, _, _, _, w_back = ctx.saved_tensors
+        input, _, _, _, _, w_back, = ctx.saved_tensors
         grad_input = grad_weight = grad_bias = None
         
         grad_bias   = (0.5 * grad_output).sum(0).detach()
@@ -198,10 +203,30 @@ class SteMatching:
         self.weight_matching = wm
         self.netm            = None
 
+    def get_l2(self, net0, net1, best_perm):
+        net1_p = self.apply_permutation(
+            net1.perm_spec, 
+            net1, 
+            best_perm
+        )
+
+        sd1 = net1_p.state_dict()
+        sd0 = net0.state_dict()
+
+        dist = 0.0
+        for key in sd0.keys():
+            if "num_batches_tracked" in key:
+                continue
+            dist += torch.norm(sd0[key] - sd1[key])
+
+        return dist
+
     def __call__(self, spec, net0, net1):
         best_perm_loss = 1000.0
         best_perm      = None
         perms          = None
+
+        net1_cpy = copy.deepcopy(net1.to("cpu")).to(self.device)
 
         net0.to(self.device)
         net1.to(self.device)
@@ -228,6 +253,12 @@ class SteMatching:
                 loss = self.loss_fn(outputs, labels)
                 gradient = torch.autograd.grad(loss, netm.parameters())
 
+                if best_perm is not None:
+                    l2_dist = self.get_l2(net0, net1_cpy, best_perm)
+                    wandb.log({"STE loss": loss.mean(), "L2 dist": l2_dist})
+                else:
+                    wandb.log({"STE loss": loss.mean()})
+  
                 if self.debug is True:
                     if cnt == 200: 
                         print("iter %d ....................." % i)
@@ -264,7 +295,7 @@ class SteMatching:
                             print(p[:11])
 
                         return
-
+            
             print("LOSS: %d" % iteration, loss_acum / total)
 
         if self.ret_perms is True:

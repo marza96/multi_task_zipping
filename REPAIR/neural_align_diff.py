@@ -100,17 +100,17 @@ class NeuralAlignDiff:
         # cl1 = apply_permutation(self.layer_indices, cl1.to("cpu"), perms)
         # return cl0.to(device), cl1.to(device)
         
-        # NOTE My Weight Matching Gen
-        from .matching.weight_matching_gen import WeightMatching
-        wm = WeightMatching(epochs=iters, debug_perms=dbg_perms, ret_perms=False)
-        cl0, cl1 = wm(self.layer_indices_ext, cl0, cl1, init_perm=init_perm)
-        return cl0.to(device), cl1.to(device)
+        # # NOTE My Weight Matching Gen
+        # from .matching.weight_matching_gen import WeightMatching
+        # wm = WeightMatching(epochs=iters, debug_perms=dbg_perms, ret_perms=False)
+        # cl0, cl1 = wm(self.layer_indices_ext, cl0, cl1, init_perm=init_perm)
+        # return cl0.to(device), cl1.to(device)
         
-        ## NOTE STE FROM ON NOW
+        # # NOTE STE FROM ON NOW
         # from .matching.weight_matching_gen import WeightMatching
         # wm = WeightMatching(epochs=iters, debug_perms=dbg_perms, ret_perms=True)
         # from .matching.ste_weight_matching_gen import SteMatching
-        # sm = SteMatching(torch.nn.functional.cross_entropy, self.loaderc, 0.25, wm, debug=dbg, epochs=15, device="mps")
+        # sm = SteMatching(torch.nn.functional.cross_entropy, self.loaderc, 0.025, wm, debug=dbg, epochs=15, device="cuda")
         # cl0, cl1 = sm(self.layer_indices_ext, cl0, cl1)
         # # print(cl1.layers[0].weight[:5, :5])
         # return cl0, cl1
@@ -125,14 +125,14 @@ class NeuralAlignDiff:
         # cl1 = apply_permutation(self.layer_indices, cl1.to("cpu"), perms)
         # print(cl1.layers[0].weight[:5, :5])
         # return cl0, cl1
-    
+
         if self.perms_calc is True:
             return self.aligned0, self.aligned1
 
         if self.perms_calc is False:
             self.perms_calc = True
 
-            cl0, cl1 = self.match_method(self.layer_indices, cl0, cl1)
+            cl0, cl1 = self.match_method(self.layer_indices_ext, cl0, cl1)
             return cl0, cl1
 
     def wrap_layers_smart(self, model, rescale):

@@ -1,4 +1,5 @@
 import os
+import wandb
 import torch
 import torchvision
 
@@ -9,9 +10,9 @@ from torch.utils.data import ConcatDataset
 from REPAIR.fuse_diff import fuse_from_cfg
 from REPAIR.net_models.models import MLP
 from REPAIR.fuse_cfg import BaseFuseCfg
-from REPAIR.matching.weight_matching import WeightMatching
+from REPAIR.matching.weight_matching_gen import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
-from REPAIR.matching.ste_weight_matching import SteMatching
+from REPAIR.matching.ste_weight_matching_gen import SteMatching
 
 
 def get_datasets():
@@ -64,7 +65,7 @@ def get_datasets():
 if __name__ == "__main__":
     loader0, loader1, loaderc = get_datasets()
 
-    fuse_cfg = BaseFuseCfg(num_experiments=3, alpha_split=10)
+    fuse_cfg = BaseFuseCfg(num_experiments=2, alpha_split=20)
 
     fuse_cfg.models = {
         0: {
@@ -84,38 +85,21 @@ if __name__ == "__main__":
                 "classes": 10,
                 "bnorm": True
             }
-        },
-        2: {
-            "model": MLP,
-            "args": {
-                "layers": 5,
-                "channels": 512,
-                "classes": 10,
-                "bnorm": True
-            }
-        },
+        }
     }
     fuse_cfg.configs = {
         0: {
-            "match_method": ActivationMatching(
-                loaderc,
-                epochs=1,
-                device="cuda"
-            ),
-            "device": "cuda"
-        },
-        1: {
             "match_method": WeightMatching(
                 epochs=1000,
                 debug=False
             ),
             "device": "cpu"
         },
-        2: {
+        1: {
             "match_method": SteMatching(
                 torch.nn.functional.cross_entropy,
                 loaderc,
-                0.25,
+                0.025,
                 WeightMatching(
                     epochs=1000,
                     ret_perms=True
@@ -126,6 +110,7 @@ if __name__ == "__main__":
             "device": "cuda"
         },
     }
+    fuse_cfg.proj_name = "mlp_fmnist_bnorm_log"
     fuse_cfg.loaders = {
         0: {
             "loader0": loader0,
@@ -137,27 +122,17 @@ if __name__ == "__main__":
             "loader1": loader1,
             "loaderc": loaderc,
         },
-        2: {
-            "loader0": loader0,
-            "loader1": loader1,
-            "loaderc": loaderc,
-        }
     }
     fuse_cfg.names = {
         0: {
-            "experiment_name": "fuse_mlp_fash_mnist_split_AM",
-            "model0_name": "mlp_first_fmnist_bnorm_1",
-            "model1_name": "mlp_second_fmnist_bnorm_1"
+            "experiment_name": "fuse_mlp_fash_mnist_split_WM",
+            "model0_name": "mlp_first_fmnist_bnorm_2_good",
+            "model1_name": "mlp_second_fmnist_bnorm_2_good"
         },
         1: {
-            "experiment_name": "fuse_mlp_fash_mnist_split_WM",
-            "model0_name": "mlp_first_fmnist_bnorm_1",
-            "model1_name": "mlp_second_fmnist_bnorm_1"
-        },
-        2: {
             "experiment_name": "fuse_mlp_fash_mnist_split_STE",
-            "model0_name": "mlp_first_fmnist_bnorm_1",
-            "model1_name": "mlp_second_fmnist_bnorm_1"
+            "model0_name": "mlp_first_fmnist_bnorm_2_good",
+            "model1_name": "mlp_second_fmnist_bnorm_2_good"
         }
     }
     fuse_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
