@@ -9,21 +9,23 @@ from torch.nn.utils.stateless import functional_call
 
 class Conv2dSTEFunc(torch.autograd.Function):
     @staticmethod
-    def forward(input, w_for, b_for, w_hat, b_hat, w_back):
+    def forward(ctx, input, w_for, b_for, w_hat, b_hat, w_back):
+        ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_back)
+
         return torch.nn.functional.conv2d(
             input, 
             w_for.detach(), 
             b_for.detach(), 
             1, 1, 1, 1)
 
-    @staticmethod
-    def setup_context(ctx, inputs, output):
-        input, w_for, b_for, w_hat, b_hat, w_back = inputs
-        ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_back)
+    # @staticmethod
+    # def setup_context(ctx, inputs, output):
+    #     input, w_for, b_for, w_hat, b_hat, w_back = inputs
+    #     ctx.save_for_backward(input, w_for, b_for, w_hat, b_hat, w_back)
 
     @staticmethod
     def backward(ctx, grad_output):
-        input, _, _, _, _, w_back = ctx.saved_tensors
+        input, _, _, _, _, w_back, = ctx.saved_tensors
         grad_input = grad_weight = grad_bias = None
 
         grad_bias = (0.5 * grad_output).sum((0, 2, 3)).squeeze(0)

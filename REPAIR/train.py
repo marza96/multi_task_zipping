@@ -54,8 +54,6 @@ def train_loop(*, model, optimizer, loss_fn, epochs, train_loader, test_loader, 
         loss_acum = 0.0
         total = 0
         for _, (inputs, labels) in enumerate(test_loader):
-            optimizer.zero_grad(set_to_none=True)
-
             outputs = model(inputs.to(device))
             loss    = loss_fn(outputs, labels.to(device))
 

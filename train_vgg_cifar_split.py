@@ -2,6 +2,8 @@ import os
 import torch
 import torchvision
 
+import numpy as np
+
 import torchvision.transforms as transforms
 
 from torch.optim import SGD
@@ -12,17 +14,21 @@ from REPAIR.net_models.models import VGG
 from REPAIR.train_cfg import BaseTrainCfg
 
 
-def get_datasets():
+def get_datasets(train=True):
     path   = os.path.dirname(os.path.abspath(__file__))
+
+    # MEAN = [0.4906, 0.4856, 0.4508]
+    # STD  = [0.2454, 0.2415, 0.2620]
 
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
+            # torchvision.transforms.Normalize(np.array(MEAN), np.array(STD))
         ]
     )
     mnistTrainSet = torchvision.datasets.CIFAR10(
         root=path + '/data', 
-        train=True,
+        train=train,
         download=True, 
         transform=transform
     )
@@ -39,13 +45,13 @@ def get_datasets():
 
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, first_half),
-        batch_size=128,
+        batch_size=256,
         shuffle=True,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=128,
+        batch_size=256,
         shuffle=True,
         num_workers=8)
     
@@ -54,61 +60,161 @@ def get_datasets():
 
 if __name__ == "__main__":
     loader0, loader1 = get_datasets()
+    loader0_test, loader1_test = get_datasets(train=False)
 
-    train_cfg = BaseTrainCfg(num_experiments=2)
+    train_cfg = BaseTrainCfg(num_experiments=6)
 
     vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
+    train_cfg.proj_name = "vgg_cifar_split"
     train_cfg.models = {
         0: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
+                "bnorm": True
             }
         },
         1: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
+                "bnorm": True
+            }
+        },
+        2: {
+            "model": VGG,
+            "args": {
+                "w": 4,
+                "cfg": vgg_cfg,
+                "classes": 10,
+                "bnorm": True
+            }
+        },
+        3: {
+            "model": VGG,
+            "args": {
+                "w": 4,
+                "cfg": vgg_cfg,
+                "classes": 10,
+                "bnorm": True
+            }
+        },
+        4: {
+            "model": VGG,
+            "args": {
+                "w": 4,
+                "cfg": vgg_cfg,
+                "classes": 10,
+                "bnorm": True
+            }
+        },
+        5: {
+            "model": VGG,
+            "args": {
+                "w": 4,
+                "cfg": vgg_cfg,
+                "classes": 10,
+                "bnorm": True
             }
         }
     }
     train_cfg.configs = {
         0: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs" : 50,
+            "epochs" : 13,
             "device": "cuda",
             "optimizer": {
-                "class": SGD,
+                "class": torch.optim.SGD,
                 "args": {
-                    "lr": 0.05,
-                    "momentum": 0.9
+                    "lr": 0.01,
+                    "momentum": 0.9,
+                    "weight_decay": 0.005
                 }
             }
         },
         1: {
             "loss_fn": CrossEntropyLoss(),
-            "epochs": 30,
+            "epochs": 13,
             "device": "cuda",
             "optimizer": {
-                "class": SGD,
+                "class": torch.optim.SGD,
                 "args": {
                     "lr": 0.01,
-                    "momentum": 0.9
+                    "momentum": 0.9,
+                    "weight_decay": 0.005
+                }
+            }
+        },
+        2: {
+            "loss_fn": CrossEntropyLoss(),
+            "epochs" : 18,
+            "device": "cuda",
+            "optimizer": {
+                "class": torch.optim.SGD,
+                "args": {
+                    "lr": 0.001,
+                    "momentum": 0.9,
+                    "weight_decay": 0.005
+                }
+            }
+        },
+        3: {
+            "loss_fn": CrossEntropyLoss(),
+            "epochs": 18,
+            "device": "cuda",
+            "optimizer": {
+                "class": torch.optim.SGD,
+                "args": {
+                    "lr": 0.001,
+                    "momentum": 0.9,
+                    "weight_decay": 0.005
+                }
+            }
+        },
+        4: {
+            "loss_fn": CrossEntropyLoss(),
+            "epochs" : 18,
+            "device": "cuda",
+            "optimizer": {
+                "class": torch.optim.Adam,
+                "args": {
+                    "lr": 0.001,
+                    "weight_decay": 0.005
+                }
+            }
+        },
+        5: {
+            "loss_fn": CrossEntropyLoss(),
+            "epochs": 18,
+            "device": "cuda",
+            "optimizer": {
+                "class": torch.optim.Adam,
+                "args": {
+                    "lr": 0.001,
+                    "weight_decay": 0.005
                 }
             }
         }
     }
     train_cfg.loaders = {
-        0: loader0,
-        1: loader1
+        0: {"train": loader0, "test": loader0_test},
+        1: {"train": loader1, "test": loader1_test},
+        2: {"train": loader0, "test": loader0_test},
+        3: {"train": loader1, "test": loader1_test},
+        4: {"train": loader0, "test": loader0_test},
+        5: {"train": loader1, "test": loader1_test},
     }
     train_cfg.names = {
-        0: "vgg_cifar_split_first",
-        1: "vgg_cifar_split_second"
+        0: "vgg_cifar_split_first_bnorm_0",
+        1: "vgg_cifar_split_second_bnorm_0",
+        2: "vgg_cifar_split_first_bnorm_1",
+        3: "vgg_cifar_split_second_bnorm_1",
+        4: "vgg_cifar_split_first_bnorm_2",
+        5: "vgg_cifar_split_second_bnorm_2"
     }
     train_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
 

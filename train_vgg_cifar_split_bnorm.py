@@ -19,7 +19,7 @@ from REPAIR.train_cfg import BaseTrainCfg
 #NOTE IMPORTANT NOTE
 #     YOU FORGOT TO ADD BATCHNORM TO THE LAST LAYER
 #     OF VGG (classifier) for the case when bnorm == True
-def get_datasets():
+def get_datasets(train=True):
     path   = os.path.dirname(os.path.abspath(__file__))
 
     # MEAN = [0.4906, 0.4856, 0.4508]
@@ -31,10 +31,9 @@ def get_datasets():
             # torchvision.transforms.Normalize(np.array(MEAN), np.array(STD))
         ]
     )
-    print("DBG", path)
     mnistTrainSet = torchvision.datasets.CIFAR10(
         root=path + '/data', 
-        train=True,
+        train=train,
         download=True, 
         transform=transform
     )
@@ -51,13 +50,13 @@ def get_datasets():
 
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, first_half),
-        batch_size=256,
+        batch_size=128,
         shuffle=True,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=256,
+        batch_size=128,
         shuffle=True,
         num_workers=8)
     
@@ -66,15 +65,16 @@ def get_datasets():
 
 if __name__ == "__main__":
     loader0, loader1 = get_datasets()
-
+    loader0_test, loader1_test = get_datasets(train=False)
+    
     train_cfg = BaseTrainCfg(num_experiments=6)
-
     vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
+    train_cfg.proj_name = "vgg_cifar_split_bnorm"
     train_cfg.models = {
         0: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -83,7 +83,7 @@ if __name__ == "__main__":
         1: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         2: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -101,7 +101,7 @@ if __name__ == "__main__":
         3: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         4: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -119,7 +119,7 @@ if __name__ == "__main__":
         5: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -205,12 +205,12 @@ if __name__ == "__main__":
         }
     }
     train_cfg.loaders = {
-        0: loader0,
-        1: loader1,
-        2: loader0,
-        3: loader1,
-        4: loader0,
-        5: loader1
+        0: {"train": loader0, "test": loader0_test},
+        1: {"train": loader1, "test": loader1_test},
+        2: {"train": loader0, "test": loader0_test},
+        3: {"train": loader1, "test": loader1_test},
+        4: {"train": loader0, "test": loader0_test},
+        5: {"train": loader1, "test": loader1_test},
     }
     train_cfg.names = {
         0: "vgg_cifar_split_first_bnorm_0",
