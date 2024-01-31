@@ -74,7 +74,7 @@ if __name__ == "__main__":
         0: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -83,7 +83,7 @@ if __name__ == "__main__":
         1: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         2: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -101,7 +101,7 @@ if __name__ == "__main__":
         3: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         4: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -119,7 +119,7 @@ if __name__ == "__main__":
         5: {
             "model": VGG,
             "args": {
-                "w": 1,
+                "w": 4,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
