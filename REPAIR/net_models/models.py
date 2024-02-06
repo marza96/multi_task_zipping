@@ -314,6 +314,29 @@ class VGGSpec:
             [f"layers.{offset + bnorm}"] 
         )
 
+        if bnorm is True:
+            self._layer_spec[-1].extend(
+                [
+                    f"layers.{offset + 1 + bnorm}.weight",
+                    f"layers.{offset + 1 + bnorm}.bias",
+                    f"layers.{offset + 1 + bnorm}.running_mean",
+                    f"layers.{offset + 1 + bnorm}.running_var",
+                ]
+            )
+            self._perm_spec[-1].extend(
+                [
+                    (-1, -1),
+                    (-1, -1),
+                    (-1, -1),
+                    (-1, -1),
+                ]   
+            )
+            self._layer_spec_unique[-1].extend(
+                [
+                    f"layers.{offset + 1 + bnorm}"
+                ]
+            )
+
     @property
     def cfg(self):
         return self._cfg

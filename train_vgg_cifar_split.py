@@ -45,13 +45,13 @@ def get_datasets(train=True):
 
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, first_half),
-        batch_size=256,
+        batch_size=512,
         shuffle=True,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=256,
+        batch_size=512,
         shuffle=True,
         num_workers=8)
     
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         0: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         1: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -88,7 +88,7 @@ if __name__ == "__main__":
         2: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -97,7 +97,7 @@ if __name__ == "__main__":
         3: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -106,7 +106,7 @@ if __name__ == "__main__":
         4: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True
@@ -115,7 +115,7 @@ if __name__ == "__main__":
         5: {
             "model": VGG,
             "args": {
-                "w": 4,
+                "w": 1,
                 "cfg": vgg_cfg,
                 "classes": 10,
                 "bnorm": True

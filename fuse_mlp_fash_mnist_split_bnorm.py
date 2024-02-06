@@ -110,7 +110,7 @@ if __name__ == "__main__":
             "device": "cuda"
         },
     }
-    fuse_cfg.proj_name = "mlp_fmnist_bnorm_log"
+    fuse_cfg.proj_name = "fuse_mlp_fmnist_bnorm_test_2"
     fuse_cfg.loaders = {
         0: {
             "loader0": loader0,

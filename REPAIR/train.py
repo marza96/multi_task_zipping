@@ -49,21 +49,21 @@ def train_loop(*, model, optimizer, loss_fn, epochs, train_loader, test_loader, 
 
         train_loss = loss_acum / total
 
+        with torch.no_grad():
+            model.eval()
+            loss_acum = 0.0
+            total = 0
+            for _, (inputs, labels) in enumerate(test_loader):
+                outputs = model(inputs.to(device))
+                loss    = loss_fn(outputs, labels.to(device))
 
-        model.eval()
-        loss_acum = 0.0
-        total = 0
-        for _, (inputs, labels) in enumerate(test_loader):
-            outputs = model(inputs.to(device))
-            loss    = loss_fn(outputs, labels.to(device))
+                loss_acum += loss.mean()
+                total += 1
 
-            loss_acum += loss.mean()
-            total += 1
+            test_loss = loss_acum / total
 
-        test_loss = loss_acum / total
-
-        test_acc = evaluate_acc_single_head(model, loader=test_loader, device=device)
-        wandb.log({"test_acc": test_acc, "train_loss": train_loss, "test_loss": test_loss})
+            # test_acc = evaluate_acc_single_head(model, loader=test_loader, device=device)
+            wandb.log({"train_loss": train_loss, "test_loss": test_loss})
 
     print("TRAIN ACC:", evaluate_acc_single_head(model, loader=train_loader, device=device))
 

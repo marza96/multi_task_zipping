@@ -1,16 +1,16 @@
 import os
+import wandb
 import torch
 import torchvision
 
 import torchvision.transforms as transforms
 
-from torch.nn import CrossEntropyLoss
 from torch.utils.data import ConcatDataset
 
 from REPAIR.fuse_diff import fuse_from_cfg
-from REPAIR.net_models.models import VGG
+from REPAIR.net_models.models import MLP
 from REPAIR.fuse_cfg import BaseFuseCfg
-from REPAIR.matching.weight_matching_gen import WeightMatching
+from REPAIR.matching.weight_matching_gpu import WeightMatching
 from REPAIR.matching.activation_matching import ActivationMatching
 from REPAIR.matching.ste_weight_matching_gen import SteMatching
 
@@ -23,7 +23,7 @@ def get_datasets():
             transforms.ToTensor(),
         ]
     )
-    mnistTrainSet = torchvision.datasets.CIFAR10(
+    mnistTrainSet = torchvision.datasets.FashionMNIST(
         root=path + '/data', 
         train=True,
         download=True, 
@@ -42,19 +42,19 @@ def get_datasets():
 
     FirstHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, first_half),
-        batch_size=256,
+        batch_size=512,
         shuffle=True,
         num_workers=8)
     
     SecondHalfLoader = torch.utils.data.DataLoader(
         torch.utils.data.Subset(mnistTrainSet, second_half),
-        batch_size=256,
+        batch_size=512,
         shuffle=True,
         num_workers=8)
     
     ConcatLoader = torch.utils.data.DataLoader(
         ConcatDataset((torch.utils.data.Subset(mnistTrainSet, first_half), torch.utils.data.Subset(mnistTrainSet, second_half))), 
-        batch_size=256,
+        batch_size=512,
         shuffle=True, 
         num_workers=8
     )
@@ -65,44 +65,23 @@ def get_datasets():
 if __name__ == "__main__":
     loader0, loader1, loaderc = get_datasets()
 
-    fuse_cfg = BaseFuseCfg(num_experiments=4, alpha_split=20)
-    
-    fuse_cfg.proj_name = "vgg_cifar_split_bnorm_log"
+    fuse_cfg = BaseFuseCfg(num_experiments=2, alpha_split=20)
 
-    vgg_cfg = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
     fuse_cfg.models = {
         0: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 2,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 512,
                 "classes": 10,
                 "bnorm": True
             }
         },
         1: {
-            "model": VGG,
+            "model": MLP,
             "args": {
-                "w": 2,
-                "cfg": vgg_cfg,
-                "classes": 10,
-                "bnorm": True
-            }
-        },
-        2: {
-            "model": VGG,
-            "args": {
-                "w": 2,
-                "cfg": vgg_cfg,
-                "classes": 10,
-                "bnorm": True
-            }
-        },
-        3: {
-            "model": VGG,
-            "args": {
-                "w": 2,
-                "cfg": vgg_cfg,
+                "layers": 5,
+                "channels": 512,
                 "classes": 10,
                 "bnorm": True
             }
@@ -117,27 +96,22 @@ if __name__ == "__main__":
             "device": "cuda"
         },
         1: {
-            "match_method": WeightMatching(
-                epochs=1000,
-                debug=False
+            "match_method": SteMatching(
+                torch.nn.functional.cross_entropy,
+                loaderc,
+                0.025,
+                WeightMatching(
+                    epochs=1000,
+                    ret_perms=True,
+                    device="cuda"
+                ),
+                epochs=20,
+                device="cuda"
             ),
             "device": "cuda"
         },
-        2: {
-            "match_method": WeightMatching(
-                epochs=1000,
-                debug=False
-            ),
-            "device": "cuda"
-        },
-        3: {
-            "match_method": WeightMatching(
-                epochs=1000,
-                debug=False
-            ),
-            "device": "cuda"
-        }
     }
+    fuse_cfg.proj_name = "fuse_mlp_fmnist_bnorm_test_gpu"
     fuse_cfg.loaders = {
         0: {
             "loader0": loader0,
@@ -149,40 +123,19 @@ if __name__ == "__main__":
             "loader1": loader1,
             "loaderc": loaderc,
         },
-        2: {
-            "loader0": loader0,
-            "loader1": loader1,
-            "loaderc": loaderc,
-        },
-        3: {
-            "loader0": loader0,
-            "loader1": loader1,
-            "loaderc": loaderc,
-        }
     }
     fuse_cfg.names = {
         0: {
-            "experiment_name": "fuse_mlp_cifar_split_WM_0",
-            "model0_name": "vgg_cifar_split_first_bnorm_0",
-            "model1_name": "vgg_cifar_split_second_bnorm_0"
+            "experiment_name": "fuse_mlp_fash_mnist_split_WM",
+            "model0_name": "mlp_first_fmnist_bnorm_2_good",
+            "model1_name": "mlp_second_fmnist_bnorm_2_good"
         },
         1: {
-            "experiment_name": "fuse_mlp_cifar_split_WM_1",
-            "model0_name": "vgg_cifar_split_first_bnorm_1",
-            "model1_name": "vgg_cifar_split_second_bnorm_1"
-        },
-        2: {
-            "experiment_name": "fuse_mlp_cifar_split_WM_2",
-            "model0_name": "vgg_cifar_split_first_bnorm_2",
-            "model1_name": "vgg_cifar_split_second_bnorm_2"
-        },
-        3: {
-            "experiment_name": "fuse_mlp_cifar_split_WM_3",
-            "model0_name": "vgg_cifar_split_first_bnorm_3",
-            "model1_name": "vgg_cifar_split_second_bnorm_3"
+            "experiment_name": "fuse_mlp_fash_mnist_split_STE",
+            "model0_name": "mlp_first_fmnist_bnorm_2_good",
+            "model1_name": "mlp_second_fmnist_bnorm_2_good"
         }
     }
-    
     fuse_cfg.root_path = os.path.dirname(os.path.abspath(__file__))
 
     fuse_from_cfg(fuse_cfg)
