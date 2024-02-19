@@ -3,6 +3,7 @@ import tqdm
 import torch
 import torchviz
 import wandb
+import numpy as np
 
 from torch.nn.utils.stateless import functional_call
 
@@ -297,7 +298,7 @@ class SteMatching:
                             print(p[:11])
 
                         return
-            
+                    
             print("LOSS: %d" % iteration, loss_acum / total)
 
         if self.ret_perms is True:
@@ -305,7 +306,14 @@ class SteMatching:
         
         # NOTE Changed in comparison to old code
         net1 = self.apply_permutation(spec, net1, best_perm)
+
+        best_perm_npy = list()
+        for p in best_perm:
+            best_perm_npy.append(p.cpu().numpy())
         
+        np.save("perm.npy", np.array(best_perm_npy))
+        print("SAVED")
+
         print("MY BEST PERM:")
         for p in best_perm:
             print(p[:11])

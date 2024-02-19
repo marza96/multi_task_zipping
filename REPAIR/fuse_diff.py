@@ -88,14 +88,14 @@ def fuse_from_cfg(train_cfg, debug=True):
 
             wandb.log({"REPAIR acc": acc})
 
-        # for i in tqdm.tqdm(range(alpha_split)):
-        #     model0_ = copy.deepcopy(model0)
-        #     model1_ = copy.deepcopy(model1)
+        for i in tqdm.tqdm(range(alpha_split)):
+            model0_ = copy.deepcopy(model0)
+            model1_ = copy.deepcopy(model1)
 
-        #     modela = neural_align_.fuse_networks(model_args, model0_, model1_, i / alpha_split, device=device, new_stats=False, permute=True).to(device)
+            modela = neural_align_.fuse_networks(model_args, model0_, model1_, i / alpha_split, device=device, new_stats=False, permute=True).to(device)
 
-        #     acc = evaluate_acc_single_head(modela, loader=loaderc, device=device)
+            acc = evaluate_acc_single_head(modela, loader=loaderc, device=device)
 
-        #     wandb.log({"permuted acc": acc})
+            wandb.log({"permuted acc": acc})
 
         wandb.finish()
